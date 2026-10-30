@@ -11,6 +11,7 @@ repositories {
 }
 
 dependencies {
+    implementation(platform(libs.kotlin.bom))
     // Без exclude для io.ksmt: версии KSMT совпадают с usvm (libs.versions.toml).
     implementation(libs.usvm.core)
     implementation(libs.ksmt.core)

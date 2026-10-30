@@ -12,6 +12,8 @@ kotlinx-serialization = "1.12.0"
 junit-jupiter-engine = "6.0.1"
 
 [libraries]
+# usvm тянет kotlin-bom 2.1.0, который закрепляет kotlin-reflect на 2.1.0 рядом со stdlib 2.4.10.
+kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
 usvm-core = { module = "com.github.UnitTestBot.usvm:usvm-core", version.ref = "usvm" }
 ksmt-core = { module = "io.ksmt:ksmt-core", version.ref = "ksmt" }
 ksmt-yices = { module = "io.ksmt:ksmt-yices", version.ref = "ksmt" }

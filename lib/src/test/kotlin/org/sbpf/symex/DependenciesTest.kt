@@ -1,10 +1,10 @@
 package org.sbpf.symex
 
 import io.ksmt.KContext
+import io.ksmt.expr.KBitVec64Value
 import io.ksmt.solver.KSolverStatus
 import io.ksmt.solver.yices.KYicesSolver
 import io.ksmt.utils.getValue
-import io.ksmt.expr.KBitVec64Value
 import org.usvm.memory.URegistersStack
 import kotlin.test.Test
 import kotlin.test.assertEquals
