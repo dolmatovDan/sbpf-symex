@@ -14,9 +14,23 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import kotlin.io.encoding.Base64
+
+const val IR_FORMAT_VERSION = 1
 
 // Незнакомые поля игнорируются: так требует контракт docs/ir.md. Тесты разбирают строже.
 val IrJson = Json { ignoreUnknownKeys = true }
+
+// format_version проверяется до разбора: новый формат даёт понятную ошибку, а не ошибку в его полях.
+// Любая ошибка загрузки — SerializationException.
+fun parseIr(text: String, json: Json = IrJson): IrModule {
+    val root = json.parseToJsonElement(text)
+    val version = (root as? JsonObject)?.get("format_version")
+    if ((version as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull != IR_FORMAT_VERSION) {
+        fail("format_version ${version ?: "отсутствует"}, поддерживается $IR_FORMAT_VERSION")
+    }
+    return json.decodeFromJsonElement(IrModule.serializer(), root)
+}
 
 // IR только читается: писать его — дело лифтера.
 private fun readOnly(): Nothing = throw UnsupportedOperationException("IR в Kotlin только читается")
@@ -38,6 +52,21 @@ internal object HexULongSerializer : KSerializer<ULong> {
     override fun deserialize(decoder: Decoder) = parseHex(decoder.decodeString())
 
     override fun serialize(encoder: Encoder, value: ULong) = readOnly()
+}
+
+internal object Base64Serializer : KSerializer<ByteArray> {
+    override val descriptor = PrimitiveSerialDescriptor("org.sbpf.symex.ir.Base64", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): ByteArray {
+        val text = decoder.decodeString()
+        return try {
+            Base64.decode(text)
+        } catch (e: IllegalArgumentException) {
+            fail("ожидался base64: ${e.message}")
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: ByteArray) = readOnly()
 }
 
 private fun width(bits: Int) = Width.ofBits(bits) ?: fail("ширина $bits")
