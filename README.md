@@ -109,7 +109,7 @@ class PathResult(
 
 ## Структура
 
-Сейчас в репозитории шаблон `gradle init`. Целевая структура первой версии:
+Целевая структура первой версии:
 
 ```
 sbpf-symex/
@@ -137,10 +137,11 @@ sbpf-symex/
 | JDK | 21 | `brew install openjdk@21` |
 | Gradle | wrapper (`./gradlew`) | — |
 | Kotlin | 2.4.10 (плагин в `libs.versions.toml`) | — |
-| usvm | `2c4f17c4c9fc0d70057e374ec462600a0d9c4bbf` | JitPack, `com.github.UnitTestBot.usvm:usvm-core` |
+| usvm | `dab6d43261eba1c4e72b35d8eda91763b6494934` | JitPack, `com.github.UnitTestBot.usvm:usvm-core` |
 | KSMT | 0.5.26 — **та же, что в usvm** | Maven Central, `io.ksmt` |
 
 - `./gradlew` требует установленную Java. `foojay-resolver` в `settings.gradle.kts` скачивает JDK только для компиляции.
+- usvm закреплена на `dab6d43`, а не на более новом `2c4f17c4`, по которому сделан [`../usvm-notes.md`](../usvm-notes.md). JitPack собирает весь проект usvm, а с коммита `befacb92` (20.09.2026) модуль `usvm-ts-fast-check` требует `npm`, которого в образе JitPack нет. Поэтому ни один коммит usvm новее 20.09 на JitPack не собирается. `usvm-core` и `usvm-util` в `dab6d43` и `2c4f17c4` совпадают (`git diff` пуст), KSMT та же. Если понадобится более новая usvm — форк с `jitpack.yml`, который собирает только `usvm-core` и `usvm-util`.
 - Все артефакты `io.ksmt:*` — ровно той версии, с которой собрана usvm (`usvm/buildSrc/src/main/kotlin/Dependencies.kt`). При конфликте Gradle молча поднимает версию до старшей, и usvm падает во время работы с `NoSuchMethodError`. Проверка: `./gradlew :lib:dependencyInsight --dependency ksmt-core`.
 - Для фикстур нужно окружение `sbpf-ir` (Rust, Solana CLI), см. его README. Для запуска Kotlin-тестов оно не нужно.
 
