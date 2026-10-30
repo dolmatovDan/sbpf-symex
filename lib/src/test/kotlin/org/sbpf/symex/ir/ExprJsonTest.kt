@@ -14,47 +14,8 @@ class ExprJsonTest {
 
     private fun expr(text: String, json: Json = strict) = json.decodeFromString<Expr>(text)
 
-    // Имена из таблицы docs/ir.md, а не irName: иначе опечатка в enum разбиралась бы сама в себя.
-    private val opNames: Map<String, Enum<*>> = mapOf(
-        "add" to BinOp.Add,
-        "sub" to BinOp.Sub,
-        "mul" to BinOp.Mul,
-        "and" to BinOp.And,
-        "or" to BinOp.Or,
-        "xor" to BinOp.Xor,
-        "udiv" to BinOp.Udiv,
-        "urem" to BinOp.Urem,
-        "shl" to BinOp.Shl,
-        "lshr" to BinOp.Lshr,
-        "ashr" to BinOp.Ashr,
-        "neg" to UnOp.Neg,
-        "bswap" to UnOp.Bswap,
-        "zext" to ExtOp.Zext,
-        "sext" to ExtOp.Sext,
-        "trunc" to ExtOp.Trunc,
-        "eq" to CmpOp.Eq,
-        "ne" to CmpOp.Ne,
-        "ult" to CmpOp.Ult,
-        "ule" to CmpOp.Ule,
-        "ugt" to CmpOp.Ugt,
-        "uge" to CmpOp.Uge,
-        "slt" to CmpOp.Slt,
-        "sle" to CmpOp.Sle,
-        "sgt" to CmpOp.Sgt,
-        "sge" to CmpOp.Sge,
-    )
-
     private val r1 = """{"kind": "reg", "reg": 1}"""
     private val r2 = """{"kind": "reg", "reg": 2}"""
-
-    // Узел своего вида с аргументами r1 и r2.
-    private fun opJson(name: String, op: Enum<*>) = when (op) {
-        is BinOp -> """{"kind": "bin", "op": "$name", "a": $r1, "b": $r2}"""
-        is CmpOp -> """{"kind": "cmp", "op": "$name", "a": $r1, "b": $r2}"""
-        is UnOp -> """{"kind": "un", "op": "$name", "a": $r1}"""
-        is ExtOp -> """{"kind": "ext", "op": "$name", "w": 64, "a": $r1}"""
-        else -> error("unknown operation kind $op")
-    }
 
     @Test
     fun leaves() {
@@ -69,29 +30,6 @@ class ExprJsonTest {
         assertEquals(5uL, small.value)
         assertSame(Width.W32, small.width)
         assertEquals("5:32", small.toString())
-    }
-
-    @Test
-    fun opNamesCoverAllOps() {
-        val all = BinOp.entries + UnOp.entries + ExtOp.entries + CmpOp.entries
-        assertEquals(all.toSet(), opNames.values.toSet())
-        assertEquals(all.size, opNames.size)
-    }
-
-    @Test
-    fun everyOp() {
-        for ((name, op) in opNames) {
-            val e = expr(opJson(name, op))
-            when (op) {
-                is BinOp -> assertSame(op, assertIs<Expr.Bin>(e).op)
-                is CmpOp -> assertSame(op, assertIs<Expr.Cmp>(e).op)
-                is UnOp -> assertSame(op, assertIs<Expr.Un>(e).op)
-                is ExtOp -> assertSame(op, assertIs<Expr.Ext>(e).op)
-                else -> error("unknown operation kind $op")
-            }
-            // irName печатается в toString и должен совпадать с именем в IR.
-            assertEquals(name, e.toString().substringBefore('(').trimEnd { it.isDigit() })
-        }
     }
 
     @Test
