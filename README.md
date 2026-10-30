@@ -151,7 +151,7 @@ sbpf-symex/
 ### Подготовка
 - [x] Установить JDK 21, проверить сборку шаблона
 - [x] Каталог версий: usvm по хэшу через JitPack, KSMT 0.5.26 + Yices, `kotlinx-serialization-json`, `kotlinx-collections-immutable`; убрать шаблонные `guava` и `commons-math3`
-- [ ] `includeBuild("../usvm")` с `dependencySubstitution` по флагу `-PlocalUsvm` — отложено: `buildSrc` usvm импортирует сгенерированные Gradle аксессоры по имени пакета с хэшем (`gradle.kotlin.dsl.accessors._466a…`), который есть только у Gradle 8.11. На 9.8.2 и 8.14.4 он не компилируется. Варианты, когда понадобится править usvm: публикация в `mavenLocal` её собственным Gradle и подстановка по флагу, или wrapper 8.11
+- [ ] `includeBuild("../usvm")` с `dependencySubstitution` по флагу `-PlocalUsvm` — отложено: `buildSrc` usvm импортирует сгенерированные Gradle аксессоры по имени пакета с хэшем (`gradle.kotlin.dsl.accessors._466a…`), который есть только у Gradle 8.11. На 9.8.2 и 8.14.4 он не компилируется. Когда понадобится править usvm, вариант такой: публиковать её в `mavenLocal` её собственным Gradle и подставлять по флагу, тогда от версии Gradle это не зависит. Понизить наш wrapper до 8.11, как у usvm, не проверялось, а Kotlin-плагин 2.4 считает Gradle ниже 8.14.4 устаревшим
 - [x] CI: сборка и тесты
 
 ### IR в Kotlin
