@@ -134,6 +134,13 @@ class ExprJsonTest {
         }
     }
 
+    // Как Option в RawExpr из ir/json.rs: null равнозначен отсутствию поля.
+    @Test
+    fun nullMeansAbsent() {
+        assertEquals("5", expr("""{"reg": null, "const": "0x5", "w": 64}""").toString())
+        assertEquals("add(r1, r2)", expr("""{"op": "add", "w": null, "args": [{"reg": 1}, {"reg": 2}]}""").toString())
+    }
+
     @Test
     fun unknownKey() {
         val text = """{"reg": 1, "comment": "x"}"""

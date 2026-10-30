@@ -1,14 +1,15 @@
 package org.sbpf.symex.ir
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -23,8 +24,8 @@ val IrJson = Json { ignoreUnknownKeys = true }
 // format_version проверяется до разбора: новый формат даёт понятную ошибку, а не ошибку в его полях.
 // Любая ошибка загрузки — SerializationException.
 fun parseIr(text: String, json: Json = IrJson): IrModule {
-    val root = json.parseToJsonElement(text)
-    val version = (root as? JsonObject)?.get("format_version")?.int("format_version")
+    val root = json.parseToJsonElement(text) as? JsonObject ?: fail("IR — не JSON-объект")
+    val version = root["format_version"]?.int("format_version")
     if (version != IR_FORMAT_VERSION) {
         fail("format_version ${version ?: "отсутствует"}, поддерживается $IR_FORMAT_VERSION")
     }
@@ -79,40 +80,36 @@ internal object WidthSerializer : KSerializer<Width> {
     override fun serialize(encoder: Encoder, value: Width) = readOnly()
 }
 
-// У листьев и операций нет общего дискриминатора, поэтому разбор по набору ключей, как RawExpr в ir/json.rs.
+// Поля как у RawExpr в ir/json.rs: null равнозначен отсутствию поля.
+@Serializable
+private class RawExpr(
+    val reg: Int? = null,
+    @SerialName("const") @Serializable(with = HexULongSerializer::class) val value: ULong? = null,
+    val w: Width? = null,
+    val op: String? = null,
+    val args: List<Expr>? = null,
+)
+
+// У листьев и операций нет общего дискриминатора, поэтому узел выбирается по набору полей.
 internal object ExprSerializer : KSerializer<Expr> {
-    override val descriptor = JsonElement.serializer().descriptor
+    override val descriptor = SerialDescriptor("org.sbpf.symex.ir.Expr", RawExpr.serializer().descriptor)
 
     override fun deserialize(decoder: Decoder): Expr {
-        val input = decoder as? JsonDecoder ?: fail("IR читается только из JSON")
-        return parseExpr(input.decodeJsonElement(), input.json)
+        val raw = decoder.decodeSerializableValue(RawExpr.serializer())
+        val reg = raw.reg
+        val value = raw.value
+        val w = raw.w
+        val op = raw.op
+        val args = raw.args
+        return when {
+            reg != null && value == null && w == null && op == null && args == null -> Expr.Reg(reg)
+            reg == null && value != null && w != null && op == null && args == null -> constant(value, w)
+            reg == null && value == null && op != null && args != null -> operation(op, w, args)
+            else -> fail("ожидалось ровно одно из: reg, const+w, op+args")
+        }
     }
 
     override fun serialize(encoder: Encoder, value: Expr) = readOnly()
-}
-
-private val exprKeys = setOf("reg", "const", "w", "op", "args")
-
-private fun parseExpr(element: JsonElement, json: Json): Expr {
-    val obj = element as? JsonObject ?: fail("выражение — не объект: $element")
-    if (!json.configuration.ignoreUnknownKeys) {
-        val unknown = obj.keys - exprKeys
-        if (unknown.isNotEmpty()) fail("незнакомые поля $unknown в выражении $obj")
-    }
-    val reg = obj["reg"]
-    val const = obj["const"]
-    val w = obj["w"]
-    val op = obj["op"]
-    val args = obj["args"]
-    return when {
-        reg != null && const == null && w == null && op == null && args == null ->
-            Expr.Reg(reg.int("reg"))
-        reg == null && const != null && w != null && op == null && args == null ->
-            constant(parseHex(const.string("const")), width(w.int("w")))
-        reg == null && const == null && op != null && args != null ->
-            operation(op.string("op"), w?.let { width(it.int("w")) }, args.exprs(json))
-        else -> fail("ожидалось ровно одно из: reg, const+w, op+args, получено $obj")
-    }
 }
 
 private fun constant(value: ULong, width: Width): Expr {
@@ -120,26 +117,31 @@ private fun constant(value: ULong, width: Width): Expr {
     return Expr.Const(value, width)
 }
 
+private val extOps = ExtOp.entries.associateBy { it.irName }
+private val binOps = BinOp.entries.associateBy { it.irName }
+private val cmpOps = CmpOp.entries.associateBy { it.irName }
+private val unOps = UnOp.entries.associateBy { it.irName }
+
 // `w` есть только у приведений ширины.
 private fun operation(name: String, w: Width?, args: List<Expr>): Expr {
     fun arity(n: Int) {
         if (args.size != n) fail("$name: неверное число аргументов ${args.size}")
     }
-    ExtOp.entries.find { it.irName == name }?.let { op ->
+    extOps[name]?.let { op ->
         if (w == null) fail("$name: нет поля w")
         arity(1)
         return Expr.Ext(op, w, args[0])
     }
     if (w != null) fail("$name: лишнее поле w")
-    BinOp.entries.find { it.irName == name }?.let { op ->
+    binOps[name]?.let { op ->
         arity(2)
         return Expr.Bin(op, args[0], args[1])
     }
-    CmpOp.entries.find { it.irName == name }?.let { op ->
+    cmpOps[name]?.let { op ->
         arity(2)
         return Expr.Cmp(op, args[0], args[1])
     }
-    UnOp.entries.find { it.irName == name }?.let { op ->
+    unOps[name]?.let { op ->
         arity(1)
         return Expr.Un(op, args[0])
     }
@@ -148,9 +150,3 @@ private fun operation(name: String, w: Width?, args: List<Expr>): Expr {
 
 private fun JsonElement.int(key: String): Int =
     (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull ?: fail("$key: ожидалось целое, получено $this")
-
-private fun JsonElement.string(key: String): String =
-    (this as? JsonPrimitive)?.takeIf { it.isString }?.content ?: fail("$key: ожидалась строка, получено $this")
-
-private fun JsonElement.exprs(json: Json): List<Expr> =
-    (this as? JsonArray ?: fail("args: ожидался массив, получено $this")).map { parseExpr(it, json) }

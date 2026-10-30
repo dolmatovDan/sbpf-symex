@@ -174,6 +174,12 @@ class IrJsonTest {
     }
 
     @Test
+    fun notAnObject() {
+        val error = assertFailsWith<SerializationException> { parseIr("[1]") }
+        assertContains(error.message!!, "не JSON-объект")
+    }
+
+    @Test
     fun badBase64() {
         assertFailsWith<SerializationException> { parseIr(module().replace("c2JwZg==", "c2JwZg=")) }
     }
