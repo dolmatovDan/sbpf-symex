@@ -38,8 +38,9 @@ IR (JSON, sbpf-lift lift)
 ```sh
 ./gradlew build
 ./gradlew test
-./gradlew test -PlocalUsvm    # usvm из исходников ../usvm вместо JitPack
 ```
+
+CI (`.github/workflows/ci.yml`) запускает `./gradlew build` на JDK 21.
 
 ## Тестирование
 
@@ -113,7 +114,7 @@ class PathResult(
 
 ```
 sbpf-symex/
-├── settings.gradle.kts         # подпроекты; includeBuild("../usvm") по флагу -PlocalUsvm
+├── settings.gradle.kts         # подпроекты
 ├── gradle/libs.versions.toml   # версии: usvm (хэш коммита), KSMT, kotlinx
 ├── scripts/
 │   └── gen-fixtures.sh         # фикстуры из ../sbpf-ir; --check — проверка свежести
@@ -148,10 +149,10 @@ sbpf-symex/
 ## План
 
 ### Подготовка
-- [ ] Установить JDK 21, проверить сборку шаблона
-- [ ] Каталог версий: usvm по хэшу через JitPack, KSMT 0.5.26 + Yices, `kotlinx-serialization-json`, `kotlinx-collections-immutable`; убрать шаблонные `guava` и `commons-math3`
-- [ ] `includeBuild("../usvm")` с `dependencySubstitution` по флагу `-PlocalUsvm`
-- [ ] CI: сборка и тесты
+- [x] Установить JDK 21, проверить сборку шаблона
+- [x] Каталог версий: usvm по хэшу через JitPack, KSMT 0.5.26 + Yices, `kotlinx-serialization-json`, `kotlinx-collections-immutable`; убрать шаблонные `guava` и `commons-math3`
+- [ ] `includeBuild("../usvm")` с `dependencySubstitution` по флагу `-PlocalUsvm` — отложено: `buildSrc` usvm импортирует сгенерированные Gradle аксессоры по имени пакета с хэшем (`gradle.kotlin.dsl.accessors._466a…`), который есть только у Gradle 8.11. На 9.8.2 и 8.14.4 он не компилируется. Варианты, когда понадобится править usvm: публикация в `mavenLocal` её собственным Gradle и подстановка по флагу, или wrapper 8.11
+- [x] CI: сборка и тесты
 
 ### IR в Kotlin
 - [ ] Типы IR: `sealed` statement'ы, выходы блока, выражения; обычные `class`, не `data class` (разные места программы — разные ключи)
