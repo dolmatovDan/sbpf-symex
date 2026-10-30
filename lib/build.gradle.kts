@@ -6,8 +6,7 @@ plugins {
 
 repositories {
     mavenCentral()
-    // usvm не публикуется в Maven Central, JitPack собирает её из GitHub по хэшу коммита.
-    // Только usvm: остальное с JitPack не берётся.
+    // usvm нет в Maven Central: JitPack собирает её по хэшу коммита и отвечает только за её группу.
     exclusiveContent {
         forRepository { maven("https://jitpack.io") }
         filter { includeGroup("com.github.UnitTestBot.usvm") }
