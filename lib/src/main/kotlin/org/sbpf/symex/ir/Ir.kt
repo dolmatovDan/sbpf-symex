@@ -1,11 +1,7 @@
-@file:OptIn(ExperimentalSerializationApi::class)
-
 package org.sbpf.symex.ir
 
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonClassDiscriminator
 
 // Формат и семантика — sbpf-ir/docs/ir.md. Классы обычные, не data: одинаковые statement'ы
 // в разных местах программы — разные шаги и разные ключи графа.
@@ -50,7 +46,6 @@ enum class Fault {
 }
 
 @Serializable
-@JsonClassDiscriminator("op")
 sealed interface Stmt {
     val pc: Int
 
@@ -73,7 +68,6 @@ sealed interface Stmt {
 
 // `next` у вызовов — null, если вызов последний в программе; поле при этом обязательно.
 @Serializable
-@JsonClassDiscriminator("kind")
 sealed interface Exit {
     // Без `pc` — продолжение в следующий блок, с `pc` — инструкция `ja`.
     @Serializable

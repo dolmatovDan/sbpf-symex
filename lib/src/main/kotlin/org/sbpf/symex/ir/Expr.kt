@@ -1,5 +1,6 @@
 package org.sbpf.symex.ir
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable(with = WidthSerializer::class)
@@ -16,70 +17,100 @@ enum class Width(val bits: Int) {
     }
 }
 
-enum class BinOp(val irName: String) {
-    Add("add"),
-    Sub("sub"),
-    Mul("mul"),
-    And("and"),
-    Or("or"),
-    Xor("xor"),
-    Udiv("udiv"),
-    Urem("urem"),
-    Shl("shl"),
-    Lshr("lshr"),
-    Ashr("ashr"),
+// Имя операции в IR задаёт @SerialName; irName читает его же, чтобы не держать второй копии.
+
+@Serializable
+enum class BinOp {
+    @SerialName("add") Add,
+    @SerialName("sub") Sub,
+    @SerialName("mul") Mul,
+    @SerialName("and") And,
+    @SerialName("or") Or,
+    @SerialName("xor") Xor,
+    @SerialName("udiv") Udiv,
+    @SerialName("urem") Urem,
+    @SerialName("shl") Shl,
+    @SerialName("lshr") Lshr,
+    @SerialName("ashr") Ashr;
+
+    val irName: String get() = serializer().descriptor.getElementName(ordinal)
 }
 
-enum class UnOp(val irName: String) {
-    Neg("neg"),
-    Bswap("bswap"),
+@Serializable
+enum class UnOp {
+    @SerialName("neg") Neg,
+    @SerialName("bswap") Bswap;
+
+    val irName: String get() = serializer().descriptor.getElementName(ordinal)
 }
 
-enum class ExtOp(val irName: String) {
-    Zext("zext"),
-    Sext("sext"),
-    Trunc("trunc"),
+@Serializable
+enum class ExtOp {
+    @SerialName("zext") Zext,
+    @SerialName("sext") Sext,
+    @SerialName("trunc") Trunc;
+
+    val irName: String get() = serializer().descriptor.getElementName(ordinal)
 }
 
-enum class CmpOp(val irName: String) {
-    Eq("eq"),
-    Ne("ne"),
-    Ult("ult"),
-    Ule("ule"),
-    Ugt("ugt"),
-    Uge("uge"),
-    Slt("slt"),
-    Sle("sle"),
-    Sgt("sgt"),
-    Sge("sge"),
+@Serializable
+enum class CmpOp {
+    @SerialName("eq") Eq,
+    @SerialName("ne") Ne,
+    @SerialName("ult") Ult,
+    @SerialName("ule") Ule,
+    @SerialName("ugt") Ugt,
+    @SerialName("uge") Uge,
+    @SerialName("slt") Slt,
+    @SerialName("sle") Sle,
+    @SerialName("sgt") Sgt,
+    @SerialName("sge") Sge;
+
+    val irName: String get() = serializer().descriptor.getElementName(ordinal)
 }
 
+// `kind` в JSON задаёт вид узла, `op` — операцию внутри вида.
 // toString — текстовая запись IR, как у `sbpf-lift ir` (print.rs).
-@Serializable(with = ExprSerializer::class)
+@Serializable
 sealed interface Expr {
-    class Reg(val index: Int) : Expr {
+    @Serializable
+    @SerialName("reg")
+    class Reg(@SerialName("reg") val index: Int) : Expr {
         override fun toString() = "r$index"
     }
 
-    class Const(val value: ULong, val width: Width) : Expr {
+    @Serializable
+    @SerialName("const")
+    class Const(
+        @Serializable(with = HexULongSerializer::class) val value: ULong,
+        @SerialName("w") val width: Width,
+    ) : Expr {
         override fun toString(): String {
             val text = if (value <= 0xffffu) value.toString() else "0x" + value.toString(16)
             return if (width == Width.W64) text else "$text:${width.bits}"
         }
     }
 
+    @Serializable
+    @SerialName("bin")
     class Bin(val op: BinOp, val a: Expr, val b: Expr) : Expr {
         override fun toString() = "${op.irName}($a, $b)"
     }
 
+    @Serializable
+    @SerialName("un")
     class Un(val op: UnOp, val a: Expr) : Expr {
         override fun toString() = "${op.irName}($a)"
     }
 
-    class Ext(val op: ExtOp, val width: Width, val a: Expr) : Expr {
+    @Serializable
+    @SerialName("ext")
+    class Ext(val op: ExtOp, @SerialName("w") val width: Width, val a: Expr) : Expr {
         override fun toString() = "${op.irName}${width.bits}($a)"
     }
 
+    @Serializable
+    @SerialName("cmp")
     class Cmp(val op: CmpOp, val a: Expr, val b: Expr) : Expr {
         override fun toString() = "${op.irName}($a, $b)"
     }

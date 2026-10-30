@@ -44,27 +44,28 @@ class ExprJsonTest {
         "sge" to CmpOp.Sge,
     )
 
-    private fun opJson(name: String, arity: Int, w: Boolean): String {
-        val args = List(arity) { """{"reg": ${it + 1}}""" }.joinToString()
-        return """{"op": "$name", ${if (w) """"w": 64, """ else ""}"args": [$args]}"""
-    }
+    private val r1 = """{"kind": "reg", "reg": 1}"""
+    private val r2 = """{"kind": "reg", "reg": 2}"""
 
-    private fun arity(op: Enum<*>) = when (op) {
-        is BinOp, is CmpOp -> 2
-        else -> 1
+    // Узел своего вида с аргументами r1 и r2.
+    private fun opJson(name: String, op: Enum<*>) = when (op) {
+        is BinOp -> """{"kind": "bin", "op": "$name", "a": $r1, "b": $r2}"""
+        is CmpOp -> """{"kind": "cmp", "op": "$name", "a": $r1, "b": $r2}"""
+        is UnOp -> """{"kind": "un", "op": "$name", "a": $r1}"""
+        is ExtOp -> """{"kind": "ext", "op": "$name", "w": 64, "a": $r1}"""
+        else -> error("unknown operation kind $op")
     }
 
     @Test
     fun leaves() {
-        assertEquals(3, assertIs<Expr.Reg>(expr("""{"reg": 3}""")).index)
-        assertEquals(10, assertIs<Expr.Reg>(expr("""{"reg": 10}""")).index)
+        assertEquals(3, assertIs<Expr.Reg>(expr("""{"kind": "reg", "reg": 3}""")).index)
 
-        val max = assertIs<Expr.Const>(expr("""{"const": "0xffffffffffffffff", "w": 64}"""))
+        val max = assertIs<Expr.Const>(expr("""{"kind": "const", "value": "0xffffffffffffffff", "w": 64}"""))
         assertEquals(ULong.MAX_VALUE, max.value)
         assertSame(Width.W64, max.width)
         assertEquals("0xffffffffffffffff", max.toString())
 
-        val small = assertIs<Expr.Const>(expr("""{"const": "0x5", "w": 32}"""))
+        val small = assertIs<Expr.Const>(expr("""{"kind": "const", "value": "0x5", "w": 32}"""))
         assertEquals(5uL, small.value)
         assertSame(Width.W32, small.width)
         assertEquals("5:32", small.toString())
@@ -80,7 +81,7 @@ class ExprJsonTest {
     @Test
     fun everyOp() {
         for ((name, op) in opNames) {
-            val e = expr(opJson(name, arity(op), w = op is ExtOp))
+            val e = expr(opJson(name, op))
             when (op) {
                 is BinOp -> assertSame(op, assertIs<Expr.Bin>(e).op)
                 is CmpOp -> assertSame(op, assertIs<Expr.Cmp>(e).op)
@@ -88,27 +89,18 @@ class ExprJsonTest {
                 is ExtOp -> assertSame(op, assertIs<Expr.Ext>(e).op)
                 else -> error("unknown operation kind $op")
             }
-        }
-    }
-
-    @Test
-    fun wrongArity() {
-        for ((name, op) in opNames) {
-            for (n in listOf(arity(op) - 1, arity(op) + 1)) {
-                assertFailsWith<SerializationException>("$name/$n") { expr(opJson(name, n, w = op is ExtOp)) }
-            }
+            // irName печатается в toString и должен совпадать с именем в IR.
+            assertEquals(name, e.toString().substringBefore('(').trimEnd { it.isDigit() })
         }
     }
 
     @Test
     fun nested() {
         val e = expr(
-            """{"op": "sext", "w": 64, "args": [
-                {"op": "add", "args": [
-                    {"op": "trunc", "w": 32, "args": [{"reg": 1}]},
-                    {"const": "0x1", "w": 32}
-                ]}
-            ]}""",
+            """{"kind": "ext", "op": "sext", "w": 64, "a":
+                {"kind": "bin", "op": "add",
+                    "a": {"kind": "ext", "op": "trunc", "w": 32, "a": $r1},
+                    "b": {"kind": "const", "value": "0x1", "w": 32}}}""",
         )
         assertEquals("sext64(add(trunc32(r1), 1:32))", e.toString())
     }
@@ -117,38 +109,31 @@ class ExprJsonTest {
     fun badExpr() {
         for (bad in listOf(
             """{}""",
-            """{"const": "5", "w": 64}""",
-            """{"const": "0x5", "w": 7}""",
-            """{"const": "0x5"}""",
-            """{"op": "add", "args": [{"reg": 1}]}""",
-            """{"op": "zext", "args": [{"reg": 1}]}""",
-            """{"op": "sdiv", "args": [{"reg": 1}, {"reg": 2}]}""",
-            """{"reg": 1, "const": "0x5", "w": 64}""",
-            """{"reg": 1, "op": "add"}""",
-            """{"op": "add", "w": 8, "args": [{"reg": 1}, {"reg": 2}]}""",
-            """{"const": "0x+5", "w": 64}""",
-            """{"const": "0x", "w": 64}""",
-            """{"const": "0x٣", "w": 64}""",
-            """{"const": "0x10000000000000000", "w": 64}""",
-            """{"const": "0x100", "w": 8}""",
-            """{"reg": 11}""",
-            """{"reg": -1}""",
+            """{"reg": 1}""",
+            """{"kind": "vec", "reg": 1}""",
+            """{"kind": "reg"}""",
+            """{"kind": "const", "value": "5", "w": 64}""",
+            """{"kind": "const", "value": "0x5", "w": 7}""",
+            """{"kind": "const", "value": "0x5"}""",
+            """{"kind": "const", "value": "0x+5", "w": 64}""",
+            """{"kind": "const", "value": "0x", "w": 64}""",
+            """{"kind": "const", "value": "0x٣", "w": 64}""",
+            """{"kind": "const", "value": "0x10000000000000000", "w": 64}""",
+            """{"kind": "bin", "op": "add", "a": $r1}""",
+            """{"kind": "ext", "op": "zext", "a": $r1}""",
+            """{"kind": "bin", "op": "sdiv", "a": $r1, "b": $r2}""",
+            // Операция чужого вида.
+            """{"kind": "bin", "op": "eq", "a": $r1, "b": $r2}""",
+            """{"kind": "un", "op": "zext", "a": $r1}""",
         )) {
             // Структура выражения проверяется и в основном режиме, не только в строгом.
             assertFailsWith<SerializationException>(bad) { expr(bad, IrJson) }
         }
     }
 
-    // Как Option в RawExpr из ir/json.rs: null равнозначен отсутствию поля.
-    @Test
-    fun nullMeansAbsent() {
-        assertEquals("5", expr("""{"reg": null, "const": "0x5", "w": 64}""").toString())
-        assertEquals("add(r1, r2)", expr("""{"op": "add", "w": null, "args": [{"reg": 1}, {"reg": 2}]}""").toString())
-    }
-
     @Test
     fun unknownKey() {
-        val text = """{"reg": 1, "comment": "x"}"""
+        val text = """{"kind": "reg", "reg": 1, "comment": "x"}"""
         assertFailsWith<SerializationException> { expr(text) }
         assertEquals(1, assertIs<Expr.Reg>(expr(text, IrJson)).index)
     }

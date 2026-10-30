@@ -1,12 +1,9 @@
 package org.sbpf.symex.ir
 
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
@@ -19,7 +16,11 @@ import kotlin.io.encoding.Base64
 const val IR_FORMAT_VERSION = 1
 
 // Незнакомые поля игнорируются: так требует контракт docs/ir.md. Тесты разбирают строже.
-val IrJson = Json { ignoreUnknownKeys = true }
+// Вид узла — поле `kind` у statement'ов, выходов блока и выражений.
+val IrJson = Json {
+    ignoreUnknownKeys = true
+    classDiscriminator = "kind"
+}
 
 // format_version проверяется до разбора: новый формат даёт понятную ошибку, а не ошибку в его полях.
 // Любая ошибка загрузки — SerializationException.
@@ -39,18 +40,52 @@ private fun checkModule(module: IrModule) {
     }
     for (block in module.functions.flatMap { it.blocks }) {
         for (stmt in block.statements) {
-            val dst = when (stmt) {
-                is Stmt.Assign -> stmt.dst
-                is Stmt.Load -> stmt.dst
-                is Stmt.Store, is Stmt.Check -> null
+            val at = "block ${block.start}, pc ${stmt.pc}"
+            when (stmt) {
+                is Stmt.Assign -> {
+                    checkDst(stmt.dst, at)
+                    checkExpr(stmt.value, at)
+                }
+                is Stmt.Load -> {
+                    checkDst(stmt.dst, at)
+                    checkExpr(stmt.addr, at)
+                }
+                is Stmt.Store -> {
+                    checkExpr(stmt.addr, at)
+                    checkExpr(stmt.value, at)
+                }
+                is Stmt.Check -> checkExpr(stmt.cond, at)
             }
-            // В r10 писать нельзя.
-            if (dst != null && dst !in 0..9) fail("block ${block.start}, pc ${stmt.pc}: write to r$dst")
         }
-        val exit = block.exit
-        if (exit is Exit.Callx && exit.reg !in 0..9) {
-            fail("block ${block.start}, pc ${exit.pc}: callx via r${exit.reg}")
+        when (val exit = block.exit) {
+            is Exit.Branch -> checkExpr(exit.cond, "block ${block.start}, pc ${exit.pc}")
+            is Exit.Callx -> if (exit.reg !in 0..9) fail("block ${block.start}, pc ${exit.pc}: callx via r${exit.reg}")
+            is Exit.Next, is Exit.Call, is Exit.Syscall, is Exit.Return, is Exit.Trap -> {}
         }
+    }
+}
+
+// В r10 писать нельзя.
+private fun checkDst(dst: Int, at: String) {
+    if (dst !in 0..9) fail("$at: write to r$dst")
+}
+
+private fun checkExpr(expr: Expr, at: String) {
+    when (expr) {
+        is Expr.Reg -> if (expr.index !in 0..10) fail("$at: no register r${expr.index}")
+        is Expr.Const -> if (expr.value and expr.width.mask.inv() != 0uL) {
+            fail("$at: constant ${expr.value} does not fit in ${expr.width.bits} bits")
+        }
+        is Expr.Bin -> {
+            checkExpr(expr.a, at)
+            checkExpr(expr.b, at)
+        }
+        is Expr.Cmp -> {
+            checkExpr(expr.a, at)
+            checkExpr(expr.b, at)
+        }
+        is Expr.Un -> checkExpr(expr.a, at)
+        is Expr.Ext -> checkExpr(expr.a, at)
     }
 }
 
@@ -101,79 +136,6 @@ internal object WidthSerializer : KSerializer<Width> {
     }
 
     override fun serialize(encoder: Encoder, value: Width) = readOnly()
-}
-
-// Поля как у RawExpr в ir/json.rs: null равнозначен отсутствию поля.
-@Serializable
-private class RawExpr(
-    val reg: Int? = null,
-    @SerialName("const") @Serializable(with = HexULongSerializer::class) val value: ULong? = null,
-    val w: Width? = null,
-    val op: String? = null,
-    val args: List<Expr>? = null,
-)
-
-// У листьев и операций нет общего дискриминатора, поэтому узел выбирается по набору полей.
-internal object ExprSerializer : KSerializer<Expr> {
-    override val descriptor = SerialDescriptor("org.sbpf.symex.ir.Expr", RawExpr.serializer().descriptor)
-
-    override fun deserialize(decoder: Decoder): Expr {
-        val raw = decoder.decodeSerializableValue(RawExpr.serializer())
-        val reg = raw.reg
-        val value = raw.value
-        val w = raw.w
-        val op = raw.op
-        val args = raw.args
-        return when {
-            reg != null && value == null && w == null && op == null && args == null -> register(reg)
-            reg == null && value != null && w != null && op == null && args == null -> constant(value, w)
-            reg == null && value == null && op != null && args != null -> operation(op, w, args)
-            else -> fail("expected exactly one of: reg, const+w, op+args")
-        }
-    }
-
-    override fun serialize(encoder: Encoder, value: Expr) = readOnly()
-}
-
-private fun register(index: Int): Expr {
-    if (index !in 0..10) fail("no register r$index")
-    return Expr.Reg(index)
-}
-
-private fun constant(value: ULong, width: Width): Expr {
-    if (value and width.mask.inv() != 0uL) fail("constant 0x${value.toString(16)} does not fit in ${width.bits} bits")
-    return Expr.Const(value, width)
-}
-
-private val extOps = ExtOp.entries.associateBy { it.irName }
-private val binOps = BinOp.entries.associateBy { it.irName }
-private val cmpOps = CmpOp.entries.associateBy { it.irName }
-private val unOps = UnOp.entries.associateBy { it.irName }
-
-// `w` есть только у приведений ширины.
-private fun operation(name: String, w: Width?, args: List<Expr>): Expr {
-    fun arity(n: Int) {
-        if (args.size != n) fail("$name: wrong number of arguments ${args.size}")
-    }
-    extOps[name]?.let { op ->
-        if (w == null) fail("$name: missing field w")
-        arity(1)
-        return Expr.Ext(op, w, args[0])
-    }
-    if (w != null) fail("$name: unexpected field w")
-    binOps[name]?.let { op ->
-        arity(2)
-        return Expr.Bin(op, args[0], args[1])
-    }
-    cmpOps[name]?.let { op ->
-        arity(2)
-        return Expr.Cmp(op, args[0], args[1])
-    }
-    unOps[name]?.let { op ->
-        arity(1)
-        return Expr.Un(op, args[0])
-    }
-    fail("unknown operation \"$name\"")
 }
 
 private fun JsonElement.int(key: String): Int =

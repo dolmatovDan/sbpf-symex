@@ -30,11 +30,17 @@ class IrJsonTest {
         "functions": [{"entry": 0, "name": "entrypoint", "blocks": [$block]}]$extra
     }"""
 
-    private fun assignBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
-        "statements": [{"pc": 0, "op": "assign", "dst": $dst, "value": {"reg": 10}}]}"""
+    private val r10 = """{"kind": "reg", "reg": 10}"""
+
+    private fun assignBlock(dst: Int, value: String = r10) = """{"start": 0, "noreturn": false,
+        "exit": {"kind": "return", "pc": 1},
+        "statements": [{"kind": "assign", "pc": 0, "dst": $dst, "value": $value}]}"""
 
     private fun loadBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
-        "statements": [{"pc": 0, "op": "load", "dst": $dst, "w": 64, "addr": {"reg": 10}}]}"""
+        "statements": [{"kind": "load", "pc": 0, "dst": $dst, "w": 64, "addr": $r10}]}"""
+
+    private fun branchBlock(cond: String) = """{"start": 0, "noreturn": false, "statements": [],
+        "exit": {"kind": "branch", "pc": 0, "then": 0, "else": 0, "cond": $cond}}"""
 
     private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
         "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
@@ -47,14 +53,17 @@ class IrJsonTest {
               "start": 85,
               "noreturn": false,
               "statements": [
-                { "pc": 85, "op": "check", "error": "DivideByZero",
-                  "cond": { "op": "ne", "args": [{ "reg": 3 }, { "const": "0x0", "w": 64 }] } },
-                { "pc": 85, "op": "assign", "dst": 2,
-                  "value": { "op": "udiv", "args": [{ "reg": 2 }, { "reg": 3 }] } },
-                { "pc": 86, "op": "store", "w": 64,
-                  "addr": { "op": "add", "args": [{ "reg": 1 }, { "const": "0x8", "w": 64 }] },
-                  "value": { "reg": 2 } },
-                { "pc": 87, "op": "assign", "dst": 2, "value": { "const": "0x0", "w": 64 } }
+                { "kind": "check", "pc": 85, "error": "DivideByZero",
+                  "cond": { "kind": "cmp", "op": "ne",
+                    "a": { "kind": "reg", "reg": 3 }, "b": { "kind": "const", "value": "0x0", "w": 64 } } },
+                { "kind": "assign", "pc": 85, "dst": 2,
+                  "value": { "kind": "bin", "op": "udiv",
+                    "a": { "kind": "reg", "reg": 2 }, "b": { "kind": "reg", "reg": 3 } } },
+                { "kind": "store", "pc": 86, "w": 64,
+                  "addr": { "kind": "bin", "op": "add",
+                    "a": { "kind": "reg", "reg": 1 }, "b": { "kind": "const", "value": "0x8", "w": 64 } },
+                  "value": { "kind": "reg", "reg": 2 } },
+                { "kind": "assign", "pc": 87, "dst": 2, "value": { "kind": "const", "value": "0x0", "w": 64 } }
               ],
               "exit": { "kind": "next", "target": 88 }
             }""",
@@ -91,7 +100,7 @@ class IrJsonTest {
     @Test
     fun load() {
         val load = assertIs<Stmt.Load>(
-            decode<Stmt>("""{"pc": 10, "op": "load", "dst": 1, "w": 8, "addr": {"reg": 2}}"""),
+            decode<Stmt>("""{"kind": "load", "pc": 10, "dst": 1, "w": 8, "addr": {"kind": "reg", "reg": 2}}"""),
         )
         assertEquals(10, load.pc)
         assertEquals(1, load.dst)
@@ -108,7 +117,8 @@ class IrJsonTest {
         val branch = assertIs<Exit.Branch>(
             decode<Exit>(
                 """{"kind": "branch", "pc": 84, "then": 90, "else": 85,
-                    "cond": {"op": "eq", "args": [{"reg": 3}, {"const": "0x0", "w": 64}]}}""",
+                    "cond": {"kind": "cmp", "op": "eq", "a": {"kind": "reg", "reg": 3},
+                        "b": {"kind": "const", "value": "0x0", "w": 64}}}""",
             ),
         )
         assertEquals(84, branch.pc)
@@ -194,6 +204,23 @@ class IrJsonTest {
         assertContains(error.message!!, "pc 0")
     }
 
+    // Значения в выражениях проверяются при загрузке модуля: в statement'ах и в условии branch.
+    @Test
+    fun exprValues() {
+        val badReg = """{"kind": "reg", "reg": 11}"""
+        val negReg = """{"kind": "reg", "reg": -1}"""
+        val wideConst = """{"kind": "const", "value": "0x100", "w": 8}"""
+        val nested = """{"kind": "bin", "op": "add", "a": $r10, "b": $badReg}"""
+        parseIr(module(assignBlock(0, r10)), strict)
+        for (value in listOf(badReg, negReg, wideConst, nested)) {
+            val text = module(assignBlock(0, value))
+            assertFailsWith<SerializationException>(text) { parseIr(text) }
+        }
+        val cond = """{"kind": "cmp", "op": "eq", "a": $badReg, "b": $r10}"""
+        val error = assertFailsWith<SerializationException> { parseIr(module(branchBlock(cond))) }
+        assertContains(error.message!!, "r11")
+    }
+
     @Test
     fun sbpfVersion() {
         parseIr(module().replace("\"sbpf_version\": 3", "\"sbpf_version\": 0"))
@@ -220,7 +247,7 @@ class IrJsonTest {
             module(extra = """, "future": 1"""),
             module(
                 block = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
-                    "statements": [{"pc": 0, "op": "assign", "dst": 0, "value": {"reg": 1}, "future": 1}]}""",
+                    "statements": [{"kind": "assign", "pc": 0, "dst": 0, "value": $r10, "future": 1}]}""",
             ),
             module(
                 block = """{"start": 0, "noreturn": false, "statements": [],
@@ -235,7 +262,7 @@ class IrJsonTest {
 
     @Test
     fun equalStatementsAreDistinct() {
-        val text = """{"pc": 0, "op": "assign", "dst": 2, "value": {"const": "0x0", "w": 64}}"""
+        val text = """{"kind": "assign", "pc": 0, "dst": 2, "value": {"kind": "const", "value": "0x0", "w": 64}}"""
         assertNotEquals(decode<Stmt>(text), decode<Stmt>(text))
     }
 }
