@@ -30,6 +30,15 @@ class IrJsonTest {
         "functions": [{"entry": 0, "name": "entrypoint", "blocks": [$block]}]$extra
     }"""
 
+    private fun assignBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
+        "statements": [{"pc": 0, "op": "assign", "dst": $dst, "value": {"reg": 10}}]}"""
+
+    private fun loadBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
+        "statements": [{"pc": 0, "op": "load", "dst": $dst, "w": 64, "addr": {"reg": 10}}]}"""
+
+    private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
+        "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
+
     // Блок bb_85 из примера в docs/ir.md.
     @Test
     fun docExampleBlock() {
@@ -172,15 +181,6 @@ class IrJsonTest {
             parseIr(module().replace("\"format_version\": 1", "\"format_version\": \"1\""))
         }
     }
-
-    private fun assignBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
-        "statements": [{"pc": 0, "op": "assign", "dst": $dst, "value": {"reg": 10}}]}"""
-
-    private fun loadBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
-        "statements": [{"pc": 0, "op": "load", "dst": $dst, "w": 64, "addr": {"reg": 10}}]}"""
-
-    private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
-        "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
 
     @Test
     fun registerRanges() {
