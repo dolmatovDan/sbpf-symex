@@ -29,7 +29,29 @@ fun parseIr(text: String, json: Json = IrJson): IrModule {
     if (version != IR_FORMAT_VERSION) {
         fail("format_version ${version ?: "отсутствует"}, поддерживается $IR_FORMAT_VERSION")
     }
-    return json.decodeFromJsonElement(IrModule.serializer(), root)
+    return json.decodeFromJsonElement(IrModule.serializer(), root).also(::checkModule)
+}
+
+// Часть Module::validate из лифтера: то, что иначе всплыло бы только в машине.
+private fun checkModule(module: IrModule) {
+    if (module.sbpfVersion != 0 && module.sbpfVersion != 3) {
+        fail("sbpf_version ${module.sbpfVersion}, поддерживаются 0 и 3")
+    }
+    for (block in module.functions.flatMap { it.blocks }) {
+        for (stmt in block.statements) {
+            val dst = when (stmt) {
+                is Stmt.Assign -> stmt.dst
+                is Stmt.Load -> stmt.dst
+                is Stmt.Store, is Stmt.Check -> null
+            }
+            // В r10 писать нельзя.
+            if (dst != null && dst !in 0..9) fail("блок ${block.start}, pc ${stmt.pc}: запись в r$dst")
+        }
+        val exit = block.exit
+        if (exit is Exit.Callx && exit.reg !in 0..9) {
+            fail("блок ${block.start}, pc ${exit.pc}: callx через r${exit.reg}")
+        }
+    }
 }
 
 // IR только читается: писать его — дело лифтера.
@@ -102,7 +124,7 @@ internal object ExprSerializer : KSerializer<Expr> {
         val op = raw.op
         val args = raw.args
         return when {
-            reg != null && value == null && w == null && op == null && args == null -> Expr.Reg(reg)
+            reg != null && value == null && w == null && op == null && args == null -> register(reg)
             reg == null && value != null && w != null && op == null && args == null -> constant(value, w)
             reg == null && value == null && op != null && args != null -> operation(op, w, args)
             else -> fail("ожидалось ровно одно из: reg, const+w, op+args")
@@ -110,6 +132,11 @@ internal object ExprSerializer : KSerializer<Expr> {
     }
 
     override fun serialize(encoder: Encoder, value: Expr) = readOnly()
+}
+
+private fun register(index: Int): Expr {
+    if (index !in 0..10) fail("нет регистра r$index")
+    return Expr.Reg(index)
 }
 
 private fun constant(value: ULong, width: Width): Expr {

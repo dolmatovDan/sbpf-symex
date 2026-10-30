@@ -57,6 +57,7 @@ class ExprJsonTest {
     @Test
     fun leaves() {
         assertEquals(3, assertIs<Expr.Reg>(expr("""{"reg": 3}""")).index)
+        assertEquals(10, assertIs<Expr.Reg>(expr("""{"reg": 10}""")).index)
 
         val max = assertIs<Expr.Const>(expr("""{"const": "0xffffffffffffffff", "w": 64}"""))
         assertEquals(ULong.MAX_VALUE, max.value)
@@ -128,6 +129,8 @@ class ExprJsonTest {
             """{"const": "0x+5", "w": 64}""",
             """{"const": "0x", "w": 64}""",
             """{"const": "0x100", "w": 8}""",
+            """{"reg": 11}""",
+            """{"reg": -1}""",
         )) {
             // Структура выражения проверяется и в основном режиме, не только в строгом.
             assertFailsWith<SerializationException>(bad) { expr(bad, IrJson) }

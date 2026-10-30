@@ -173,6 +173,30 @@ class IrJsonTest {
         }
     }
 
+    private fun assignBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
+        "statements": [{"pc": 0, "op": "assign", "dst": $dst, "value": {"reg": 10}}]}"""
+
+    private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
+        "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
+
+    @Test
+    fun registerRanges() {
+        parseIr(module(assignBlock(9)), strict)
+        parseIr(module(callxBlock(9)), strict)
+        for (bad in listOf(module(assignBlock(10)), module(assignBlock(-1)), module(callxBlock(10)))) {
+            assertFailsWith<SerializationException>(bad) { parseIr(bad) }
+        }
+    }
+
+    @Test
+    fun sbpfVersion() {
+        parseIr(module().replace("\"sbpf_version\": 3", "\"sbpf_version\": 0"))
+        val error = assertFailsWith<SerializationException> {
+            parseIr(module().replace("\"sbpf_version\": 3", "\"sbpf_version\": 2"))
+        }
+        assertContains(error.message!!, "sbpf_version 2")
+    }
+
     @Test
     fun notAnObject() {
         val error = assertFailsWith<SerializationException> { parseIr("[1]") }
