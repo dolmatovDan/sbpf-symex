@@ -176,16 +176,22 @@ class IrJsonTest {
     private fun assignBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
         "statements": [{"pc": 0, "op": "assign", "dst": $dst, "value": {"reg": 10}}]}"""
 
+    private fun loadBlock(dst: Int) = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
+        "statements": [{"pc": 0, "op": "load", "dst": $dst, "w": 64, "addr": {"reg": 10}}]}"""
+
     private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
         "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
 
     @Test
     fun registerRanges() {
         parseIr(module(assignBlock(9)), strict)
+        parseIr(module(loadBlock(9)), strict)
         parseIr(module(callxBlock(9)), strict)
-        for (bad in listOf(module(assignBlock(10)), module(assignBlock(-1)), module(callxBlock(10)))) {
+        for (bad in listOf(module(assignBlock(-1)), module(loadBlock(10)), module(callxBlock(10)))) {
             assertFailsWith<SerializationException>(bad) { parseIr(bad) }
         }
+        val error = assertFailsWith<SerializationException> { parseIr(module(assignBlock(10))) }
+        assertContains(error.message!!, "pc 0")
     }
 
     @Test
