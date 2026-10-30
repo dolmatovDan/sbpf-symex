@@ -92,12 +92,13 @@ internal object Base64Serializer : KSerializer<ByteArray> {
     override fun serialize(encoder: Encoder, value: ByteArray) = readOnly()
 }
 
-private fun width(bits: Int) = Width.ofBits(bits) ?: fail("invalid width $bits")
-
 internal object WidthSerializer : KSerializer<Width> {
     override val descriptor = PrimitiveSerialDescriptor("org.sbpf.symex.ir.Width", PrimitiveKind.INT)
 
-    override fun deserialize(decoder: Decoder) = width(decoder.decodeInt())
+    override fun deserialize(decoder: Decoder): Width {
+        val bits = decoder.decodeInt()
+        return Width.ofBits(bits) ?: fail("invalid width $bits")
+    }
 
     override fun serialize(encoder: Encoder, value: Width) = readOnly()
 }
