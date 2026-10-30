@@ -86,7 +86,7 @@ class ExprJsonTest {
                 is CmpOp -> assertSame(op, assertIs<Expr.Cmp>(e).op)
                 is UnOp -> assertSame(op, assertIs<Expr.Un>(e).op)
                 is ExtOp -> assertSame(op, assertIs<Expr.Ext>(e).op)
-                else -> error("неизвестный вид операции $op")
+                else -> error("unknown operation kind $op")
             }
         }
     }
@@ -128,6 +128,8 @@ class ExprJsonTest {
             """{"op": "add", "w": 8, "args": [{"reg": 1}, {"reg": 2}]}""",
             """{"const": "0x+5", "w": 64}""",
             """{"const": "0x", "w": 64}""",
+            """{"const": "0x٣", "w": 64}""",
+            """{"const": "0x10000000000000000", "w": 64}""",
             """{"const": "0x100", "w": 8}""",
             """{"reg": 11}""",
             """{"reg": -1}""",

@@ -24,10 +24,10 @@ val IrJson = Json { ignoreUnknownKeys = true }
 // format_version проверяется до разбора: новый формат даёт понятную ошибку, а не ошибку в его полях.
 // Любая ошибка загрузки — SerializationException.
 fun parseIr(text: String, json: Json = IrJson): IrModule {
-    val root = json.parseToJsonElement(text) as? JsonObject ?: fail("IR — не JSON-объект")
+    val root = json.parseToJsonElement(text) as? JsonObject ?: fail("IR is not a JSON object")
     val version = root["format_version"]?.int("format_version")
     if (version != IR_FORMAT_VERSION) {
-        fail("format_version ${version ?: "отсутствует"}, поддерживается $IR_FORMAT_VERSION")
+        fail("format_version ${version ?: "missing"}, supported $IR_FORMAT_VERSION")
     }
     return json.decodeFromJsonElement(IrModule.serializer(), root).also(::checkModule)
 }
@@ -35,7 +35,7 @@ fun parseIr(text: String, json: Json = IrJson): IrModule {
 // Часть Module::validate из лифтера: то, что иначе всплыло бы только в машине.
 private fun checkModule(module: IrModule) {
     if (module.sbpfVersion != 0 && module.sbpfVersion != 3) {
-        fail("sbpf_version ${module.sbpfVersion}, поддерживаются 0 и 3")
+        fail("sbpf_version ${module.sbpfVersion}, supported 0 and 3")
     }
     for (block in module.functions.flatMap { it.blocks }) {
         for (stmt in block.statements) {
@@ -45,29 +45,29 @@ private fun checkModule(module: IrModule) {
                 is Stmt.Store, is Stmt.Check -> null
             }
             // В r10 писать нельзя.
-            if (dst != null && dst !in 0..9) fail("блок ${block.start}, pc ${stmt.pc}: запись в r$dst")
+            if (dst != null && dst !in 0..9) fail("block ${block.start}, pc ${stmt.pc}: write to r$dst")
         }
         val exit = block.exit
         if (exit is Exit.Callx && exit.reg !in 0..9) {
-            fail("блок ${block.start}, pc ${exit.pc}: callx через r${exit.reg}")
+            fail("block ${block.start}, pc ${exit.pc}: callx via r${exit.reg}")
         }
     }
 }
 
 // IR только читается: писать его — дело лифтера.
-private fun readOnly(): Nothing = throw UnsupportedOperationException("IR в Kotlin только читается")
+private fun readOnly(): Nothing = throw UnsupportedOperationException("IR is read-only in Kotlin")
 
 private fun fail(message: String): Nothing = throw SerializationException(message)
 
-// 64-битные числа в IR — строки "0x…". toULong(16) сам принял бы "+5", поэтому цифры проверяются явно.
-private fun parseHex(text: String): ULong {
-    val digits = text.removePrefix("0x")
-    val isHex = digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
-    if (digits.length == text.length || digits.isEmpty() || !isHex) {
-        fail("ожидалось 0x…, получено \"$text\"")
+private val hexFormat = HexFormat { number.prefix = "0x" }
+
+// 64-битные числа в IR — строки "0x…". hexToULong, в отличие от toULong(16), не принимает "+5" и не-ASCII цифры.
+private fun parseHex(text: String): ULong =
+    try {
+        text.hexToULong(hexFormat)
+    } catch (e: NumberFormatException) {
+        fail("expected 0x…, got \"$text\": ${e.message}")
     }
-    return digits.toULongOrNull(16) ?: fail("$text не помещается в 64 бита")
-}
 
 internal object HexULongSerializer : KSerializer<ULong> {
     override val descriptor = PrimitiveSerialDescriptor("org.sbpf.symex.ir.HexULong", PrimitiveKind.STRING)
@@ -85,14 +85,14 @@ internal object Base64Serializer : KSerializer<ByteArray> {
         return try {
             Base64.decode(text)
         } catch (e: IllegalArgumentException) {
-            fail("ожидался base64: ${e.message}")
+            fail("expected base64: ${e.message}")
         }
     }
 
     override fun serialize(encoder: Encoder, value: ByteArray) = readOnly()
 }
 
-private fun width(bits: Int) = Width.ofBits(bits) ?: fail("ширина $bits")
+private fun width(bits: Int) = Width.ofBits(bits) ?: fail("invalid width $bits")
 
 internal object WidthSerializer : KSerializer<Width> {
     override val descriptor = PrimitiveSerialDescriptor("org.sbpf.symex.ir.Width", PrimitiveKind.INT)
@@ -127,7 +127,7 @@ internal object ExprSerializer : KSerializer<Expr> {
             reg != null && value == null && w == null && op == null && args == null -> register(reg)
             reg == null && value != null && w != null && op == null && args == null -> constant(value, w)
             reg == null && value == null && op != null && args != null -> operation(op, w, args)
-            else -> fail("ожидалось ровно одно из: reg, const+w, op+args")
+            else -> fail("expected exactly one of: reg, const+w, op+args")
         }
     }
 
@@ -135,12 +135,12 @@ internal object ExprSerializer : KSerializer<Expr> {
 }
 
 private fun register(index: Int): Expr {
-    if (index !in 0..10) fail("нет регистра r$index")
+    if (index !in 0..10) fail("no register r$index")
     return Expr.Reg(index)
 }
 
 private fun constant(value: ULong, width: Width): Expr {
-    if (value and width.mask.inv() != 0uL) fail("константа 0x${value.toString(16)} не помещается в ${width.bits} бит")
+    if (value and width.mask.inv() != 0uL) fail("constant 0x${value.toString(16)} does not fit in ${width.bits} bits")
     return Expr.Const(value, width)
 }
 
@@ -152,14 +152,14 @@ private val unOps = UnOp.entries.associateBy { it.irName }
 // `w` есть только у приведений ширины.
 private fun operation(name: String, w: Width?, args: List<Expr>): Expr {
     fun arity(n: Int) {
-        if (args.size != n) fail("$name: неверное число аргументов ${args.size}")
+        if (args.size != n) fail("$name: wrong number of arguments ${args.size}")
     }
     extOps[name]?.let { op ->
-        if (w == null) fail("$name: нет поля w")
+        if (w == null) fail("$name: missing field w")
         arity(1)
         return Expr.Ext(op, w, args[0])
     }
-    if (w != null) fail("$name: лишнее поле w")
+    if (w != null) fail("$name: unexpected field w")
     binOps[name]?.let { op ->
         arity(2)
         return Expr.Bin(op, args[0], args[1])
@@ -172,8 +172,8 @@ private fun operation(name: String, w: Width?, args: List<Expr>): Expr {
         arity(1)
         return Expr.Un(op, args[0])
     }
-    fail("неизвестная операция \"$name\"")
+    fail("unknown operation \"$name\"")
 }
 
 private fun JsonElement.int(key: String): Int =
-    (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull ?: fail("$key: ожидалось целое, получено $this")
+    (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull ?: fail("$key: expected an integer, got $this")

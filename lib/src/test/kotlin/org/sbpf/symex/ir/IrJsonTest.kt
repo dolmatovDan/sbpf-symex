@@ -206,7 +206,7 @@ class IrJsonTest {
     @Test
     fun notAnObject() {
         val error = assertFailsWith<SerializationException> { parseIr("[1]") }
-        assertContains(error.message!!, "не JSON-объект")
+        assertContains(error.message!!, "not a JSON object")
     }
 
     @Test
