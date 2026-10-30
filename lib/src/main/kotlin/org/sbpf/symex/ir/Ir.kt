@@ -82,7 +82,12 @@ sealed interface Exit {
 
     @Serializable
     @SerialName("branch")
-    class Branch(val pc: Int, val cond: Expr, val then: Int, @SerialName("else") val elseTarget: Int) : Exit
+    class Branch(
+        val pc: Int,
+        val cond: Expr,
+        @SerialName("then") val thenTarget: Int,
+        @SerialName("else") val elseTarget: Int,
+    ) : Exit
 
     @Serializable
     @SerialName("call")

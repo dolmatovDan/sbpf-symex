@@ -4,7 +4,6 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
@@ -25,8 +24,8 @@ val IrJson = Json { ignoreUnknownKeys = true }
 // Любая ошибка загрузки — SerializationException.
 fun parseIr(text: String, json: Json = IrJson): IrModule {
     val root = json.parseToJsonElement(text)
-    val version = (root as? JsonObject)?.get("format_version")
-    if ((version as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull != IR_FORMAT_VERSION) {
+    val version = (root as? JsonObject)?.get("format_version")?.int("format_version")
+    if (version != IR_FORMAT_VERSION) {
         fail("format_version ${version ?: "отсутствует"}, поддерживается $IR_FORMAT_VERSION")
     }
     return json.decodeFromJsonElement(IrModule.serializer(), root)
@@ -40,7 +39,8 @@ private fun fail(message: String): Nothing = throw SerializationException(messag
 // 64-битные числа в IR — строки "0x…". toULong(16) сам принял бы "+5", поэтому цифры проверяются явно.
 private fun parseHex(text: String): ULong {
     val digits = text.removePrefix("0x")
-    if (digits.length == text.length || digits.isEmpty() || !digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+    val isHex = digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+    if (digits.length == text.length || digits.isEmpty() || !isHex) {
         fail("ожидалось 0x…, получено \"$text\"")
     }
     return digits.toULongOrNull(16) ?: fail("$text не помещается в 64 бита")
@@ -81,7 +81,7 @@ internal object WidthSerializer : KSerializer<Width> {
 
 // У листьев и операций нет общего дискриминатора, поэтому разбор по набору ключей, как RawExpr в ir/json.rs.
 internal object ExprSerializer : KSerializer<Expr> {
-    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    override val descriptor = JsonElement.serializer().descriptor
 
     override fun deserialize(decoder: Decoder): Expr {
         val input = decoder as? JsonDecoder ?: fail("IR читается только из JSON")

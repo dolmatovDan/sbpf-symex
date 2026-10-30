@@ -17,7 +17,10 @@ class IrJsonTest {
 
     private inline fun <reified T> decode(text: String) = strict.decodeFromString<T>(text)
 
-    private fun module(block: String = """{"start": 0, "noreturn": false, "statements": [], "exit": {"kind": "return", "pc": 0}}""", extra: String = "") = """{
+    private val emptyBlock =
+        """{"start": 0, "noreturn": false, "statements": [], "exit": {"kind": "return", "pc": 0}}"""
+
+    private fun module(block: String = emptyBlock, extra: String = "") = """{
         "format_version": 1,
         "sbpf_version": 3,
         "entrypoint": 0,
@@ -78,7 +81,9 @@ class IrJsonTest {
 
     @Test
     fun load() {
-        val load = assertIs<Stmt.Load>(decode<Stmt>("""{"pc": 10, "op": "load", "dst": 1, "w": 8, "addr": {"reg": 2}}"""))
+        val load = assertIs<Stmt.Load>(
+            decode<Stmt>("""{"pc": 10, "op": "load", "dst": 1, "w": 8, "addr": {"reg": 2}}"""),
+        )
         assertEquals(10, load.pc)
         assertEquals(1, load.dst)
         assertSame(Width.W8, load.width)
@@ -99,7 +104,7 @@ class IrJsonTest {
         )
         assertEquals(84, branch.pc)
         assertEquals("eq(r3, 0)", branch.cond.toString())
-        assertEquals(90, branch.then)
+        assertEquals(90, branch.thenTarget)
         assertEquals(85, branch.elseTarget)
 
         val call = assertIs<Exit.Call>(decode<Exit>("""{"kind": "call", "pc": 7, "target": 84, "next": null}"""))
@@ -111,7 +116,7 @@ class IrJsonTest {
         assertEquals(5, callx.reg)
         assertEquals(8, callx.next)
 
-        // Хеш syscall'а — u32: значения от 2³¹ не помещаются в Int.
+        // Хэш syscall'а — u32: значения от 2³¹ не помещаются в Int.
         val syscall = assertIs<Exit.Syscall>(
             decode<Exit>("""{"kind": "syscall", "pc": 7, "hash": 4000000000, "name": null, "next": 8}"""),
         )
@@ -134,7 +139,9 @@ class IrJsonTest {
     @Test
     fun nullableFieldsAreRequired() {
         assertFailsWith<SerializationException> { decode<Exit>("""{"kind": "call", "pc": 7, "target": 84}""") }
-        assertFailsWith<SerializationException> { decode<Exit>("""{"kind": "syscall", "pc": 7, "hash": 1, "next": 8}""") }
+        assertFailsWith<SerializationException> {
+            decode<Exit>("""{"kind": "syscall", "pc": 7, "hash": 1, "next": 8}""")
+        }
     }
 
     @Test
@@ -161,7 +168,9 @@ class IrJsonTest {
         }
         assertContains(missing.message!!, "format_version")
 
-        assertFailsWith<SerializationException> { parseIr(module().replace("\"format_version\": 1", "\"format_version\": \"1\"")) }
+        assertFailsWith<SerializationException> {
+            parseIr(module().replace("\"format_version\": 1", "\"format_version\": \"1\""))
+        }
     }
 
     @Test
@@ -177,7 +186,10 @@ class IrJsonTest {
                 block = """{"start": 0, "noreturn": false, "exit": {"kind": "return", "pc": 1},
                     "statements": [{"pc": 0, "op": "assign", "dst": 0, "value": {"reg": 1}, "future": 1}]}""",
             ),
-            module(block = """{"start": 0, "noreturn": false, "statements": [], "exit": {"kind": "return", "pc": 0, "future": 1}}"""),
+            module(
+                block = """{"start": 0, "noreturn": false, "statements": [],
+                    "exit": {"kind": "return", "pc": 0, "future": 1}}""",
+            ),
         )
         for (text in cases) {
             assertFailsWith<SerializationException>(text) { parseIr(text, strict) }
