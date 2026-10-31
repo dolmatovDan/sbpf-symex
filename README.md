@@ -25,7 +25,7 @@ IR (JSON, sbpf-lift lift)
 ```
 
 - **Загрузка IR.** JSON из `sbpf-lift lift` превращается в `sealed`-иерархии Kotlin: statement'ы, выходы блока и выражения; вид узла у всех — поле `kind`. Проверяются `format_version`, `sbpf_version` (0 или 3), номера регистров (чтение `r0`–`r10`, запись и `callx` — `r0`–`r9`) и то, что константы помещаются в свою ширину. Незнакомые необязательные поля игнорируются, как требует контракт.
-- **Граф программы.** `ApplicationGraph` над функциями и блоками IR: шаг — это statement или выход блока, у обоих есть `pc`. Преемники берутся из выходов блоков (`next`, `branch`, `call`...).
+- **Граф программы.** `ApplicationGraph` над функциями и блоками IR: шаг — это statement или выход блока; `pc` есть у всех, кроме `next` без `ja`. Преемники берутся из выходов блоков (`next`, `branch`, `call`...).
 - **Состояние.** Наследник `UState`. Регистры `r0`–`r10` лежат в кадрах `URegistersStack` (`memory.stack`), как описано в `ir.md`: регистр, прочитанный до записи, автоматически становится символом-входом. Остальное — условия пути, pc (`pathNode`), признак завершения, ошибка.
 - **Интерпретатор.** `UInterpreter.step`: `when` по виду statement'а. Выражения IR один к одному переводятся в битвекторные термы KSMT через `UContext`. `check` — развилка: путь, где условие ложно, завершается ошибкой и тоже попадает в результаты.
 - **Машина.** `UMachine.run` с селектором путей, наблюдателями (сбор завершённых путей, счётчик шагов) и стоп-стратегиями.
@@ -33,7 +33,7 @@ IR (JSON, sbpf-lift lift)
 
 ## Использование
 
-Пока ничего не реализовано, разделы появятся по мере готовности.
+`SbpfMachine` исполняет программы из одного блока (`assign` и `return`): `SbpfMachine(module).use { m -> m.analyze().map { it.registers() } }` даёт `r0`–`r10` в конце каждого пути. Машина держит солвер Yices и контекст, поэтому регистры читаются до `close`. Остальные разделы появятся по мере готовности.
 
 ```sh
 ./gradlew build
@@ -162,12 +162,12 @@ sbpf-symex/
 - [x] Проверка `format_version`; в тестах — строгий режим (`ignoreUnknownKeys = false`), чтобы заметить новые поля лифтера
 
 ### Первая версия: регистры и арифметика
-- [ ] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
-- [ ] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
-- [ ] `SbpfApplicationGraph` для одного блока: statement'ы по порядку, выход `return`
-- [ ] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `SampleState`
-- [ ] `SbpfInterpreter`: `assign`, `return`
-- [ ] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
+- [x] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
+- [x] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
+- [x] `SbpfApplicationGraph`: полный по выходам блоков, исполняются `assign` и `return`
+- [x] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `JcState.clone` (`SampleState` не обновляет жетон оригинала)
+- [x] `SbpfInterpreter`: `assign`, `return`
+- [x] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
 
 ### Тестовая инфраструктура
 - [ ] `scripts/gen-fixtures.sh`: IR и ответы раннера для `asm/*` под v0 и v3, коммит `sbpf-ir` в `SOURCE`, режим `--check`

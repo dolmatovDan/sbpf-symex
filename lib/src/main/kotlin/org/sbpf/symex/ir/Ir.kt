@@ -45,9 +45,15 @@ enum class Fault {
     ExecutionOverrun,
 }
 
+// Шаг машины: statement или выход блока. В JSON его нет, это общий тип узлов графа программы.
+// pc нет только у выхода `next` без инструкции `ja`.
+sealed interface Step {
+    val pc: Int?
+}
+
 @Serializable
-sealed interface Stmt {
-    val pc: Int
+sealed interface Stmt : Step {
+    override val pc: Int
 
     @Serializable
     @SerialName("assign")
@@ -68,16 +74,16 @@ sealed interface Stmt {
 
 // `next` у вызовов — null, если вызов последний в программе; поле при этом обязательно.
 @Serializable
-sealed interface Exit {
+sealed interface Exit : Step {
     // Без `pc` — продолжение в следующий блок, с `pc` — инструкция `ja`.
     @Serializable
     @SerialName("next")
-    class Next(val target: Int, val pc: Int? = null) : Exit
+    class Next(val target: Int, override val pc: Int? = null) : Exit
 
     @Serializable
     @SerialName("branch")
     class Branch(
-        val pc: Int,
+        override val pc: Int,
         val cond: Expr,
         @SerialName("then") val thenTarget: Int,
         @SerialName("else") val elseTarget: Int,
@@ -85,21 +91,21 @@ sealed interface Exit {
 
     @Serializable
     @SerialName("call")
-    class Call(val pc: Int, val target: Int, val next: Int?) : Exit
+    class Call(override val pc: Int, val target: Int, val next: Int?) : Exit
 
     @Serializable
     @SerialName("callx")
-    class Callx(val pc: Int, val reg: Int, val next: Int?) : Exit
+    class Callx(override val pc: Int, val reg: Int, val next: Int?) : Exit
 
     @Serializable
     @SerialName("syscall")
-    class Syscall(val pc: Int, val hash: UInt, val name: String?, val next: Int?) : Exit
+    class Syscall(override val pc: Int, val hash: UInt, val name: String?, val next: Int?) : Exit
 
     @Serializable
     @SerialName("return")
-    class Return(val pc: Int) : Exit
+    class Return(override val pc: Int) : Exit
 
     @Serializable
     @SerialName("trap")
-    class Trap(val pc: Int, val error: Fault) : Exit
+    class Trap(override val pc: Int, val error: Fault) : Exit
 }
