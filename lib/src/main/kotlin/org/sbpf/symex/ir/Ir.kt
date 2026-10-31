@@ -45,8 +45,11 @@ enum class Fault {
     ExecutionOverrun,
 }
 
+// Шаг машины: statement или выход блока. В JSON его нет, это общий тип узлов графа программы.
+sealed interface Step
+
 @Serializable
-sealed interface Stmt {
+sealed interface Stmt : Step {
     val pc: Int
 
     @Serializable
@@ -68,7 +71,7 @@ sealed interface Stmt {
 
 // `next` у вызовов — null, если вызов последний в программе; поле при этом обязательно.
 @Serializable
-sealed interface Exit {
+sealed interface Exit : Step {
     // Без `pc` — продолжение в следующий блок, с `pc` — инструкция `ja`.
     @Serializable
     @SerialName("next")
