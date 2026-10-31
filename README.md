@@ -33,7 +33,7 @@ IR (JSON, sbpf-lift lift)
 
 ## Использование
 
-Пока ничего не реализовано, разделы появятся по мере готовности.
+`SbpfMachine(module).analyze()` исполняет программы из одного блока (`assign` и `return`) и возвращает завершённые пути; регистры в конце пути — `SbpfState.registers()`. Остальные разделы появятся по мере готовности.
 
 ```sh
 ./gradlew build
@@ -162,12 +162,12 @@ sbpf-symex/
 - [x] Проверка `format_version`; в тестах — строгий режим (`ignoreUnknownKeys = false`), чтобы заметить новые поля лифтера
 
 ### Первая версия: регистры и арифметика
-- [ ] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
-- [ ] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
-- [ ] `SbpfApplicationGraph` для одного блока: statement'ы по порядку, выход `return`
-- [ ] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `SampleState`
-- [ ] `SbpfInterpreter`: `assign`, `return`
-- [ ] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
+- [x] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
+- [x] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
+- [x] `SbpfApplicationGraph`: полный по выходам блоков, исполняются `assign` и `return`
+- [x] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `SampleState`
+- [x] `SbpfInterpreter`: `assign`, `return`
+- [x] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
 
 ### Тестовая инфраструктура
 - [ ] `scripts/gen-fixtures.sh`: IR и ответы раннера для `asm/*` под v0 и v3, коммит `sbpf-ir` в `SOURCE`, режим `--check`
