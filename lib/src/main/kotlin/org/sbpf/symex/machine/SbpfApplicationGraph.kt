@@ -68,7 +68,7 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
         is Exit.Return, is Exit.Trap -> emptyList()
     }
 
-    private fun block(start: Int) = blocks[start] ?: throw IllegalArgumentException("no block at pc $start")
+    private fun block(start: Int) = requireNotNull(blocks[start]) { "no block at pc $start" }
 
-    private fun function(entry: Int) = functions[entry] ?: throw IllegalArgumentException("no function at pc $entry")
+    private fun function(entry: Int) = requireNotNull(functions[entry]) { "no function at pc $entry" }
 }

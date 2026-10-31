@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotSame
 
 class SbpfStateTest {
     private val ctx = SbpfContext(SbpfComponents(UMachineOptions()))
@@ -34,10 +35,15 @@ class SbpfStateTest {
         assertEquals(mkRegisterReading(2, bv64Sort), copy.memory.stack.readRegister(2, bv64Sort))
     }
 
+    // Оригинал после clone держит новый жетон: откат неудачного fork в StateForker вернёт условиям пути его,
+    // а не старый, общий с копией.
     @Test
-    fun cloneKeepsExited() {
+    fun cloneRenewsOriginalOwnership() {
         val entry = function("main", block(0, exit = Exit.Return(0)))
-        val state = SbpfState(ctx, MutabilityOwnership(), entry, exited = true)
-        assertEquals(true, state.clone().exited)
+        val state = SbpfState(ctx, MutabilityOwnership(), entry)
+        val before = state.ownership
+        val copy = state.clone()
+        assertNotSame(before, state.ownership)
+        assertNotSame(state.ownership, copy.ownership)
     }
 }

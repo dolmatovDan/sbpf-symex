@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 // Программы из одного блока, ожидания посчитаны руками (как в sbpf-ir, тест asm в crates/sbpf-run/tests/run.rs).
 class SbpfMachineTest {
-    private fun run(module: IrModule) = SbpfMachine(module).use { machine ->
+    private fun registersAfter(module: IrModule) = SbpfMachine(module).use { machine ->
         val states = machine.analyze()
         assertEquals(1, states.size, "one path without branches")
         val state = states.single()
@@ -33,7 +33,7 @@ class SbpfMachineTest {
     // Как в alu64.s: lddw, add с переполнением, sub, mul по модулю 2^64, neg.
     @Test
     fun alu64() {
-        val registers = run(
+        val registers = registersAfter(
             program(
                 assign(0, 1, imm(0xfffffffffffffffeuL)),
                 assign(1, 1, bin(BinOp.Add, reg(1), imm(5uL))),
@@ -57,7 +57,7 @@ class SbpfMachineTest {
     // add32 расширяет результат знаком, lsh32 и mov32 — нулями; сдвиг на регистр маскируется лифтером.
     @Test
     fun alu32() {
-        val registers = run(
+        val registers = registersAfter(
             program(
                 assign(0, 1, imm(0x7fffffffuL)),
                 assign(1, 1, Expr.Ext(ExtOp.Sext, Width.W64, bin(BinOp.Add, lo32(reg(1)), imm(1uL, Width.W32)))),
@@ -84,7 +84,7 @@ class SbpfMachineTest {
     // mov64 и чтение только что записанного регистра.
     @Test
     fun mov() {
-        val registers = run(
+        val registers = registersAfter(
             program(
                 assign(0, 4, imm(0xdeadbeefcafebabeuL)),
                 assign(1, 6, reg(4)),
@@ -100,9 +100,23 @@ class SbpfMachineTest {
     @Test
     fun unsupportedStep() {
         val branch = Exit.Branch(1, Expr.Cmp(CmpOp.Eq, reg(1), imm(0uL)), thenTarget = 2, elseTarget = 2)
-        val ir = module(function("entrypoint", block(0, assign(0, 1, imm(0uL)), exit = branch), block(2, exit = Exit.Return(2))))
+        val ir = module(
+            function(
+                "entrypoint",
+                block(0, assign(0, 1, imm(0uL)), exit = branch),
+                block(2, exit = Exit.Return(2)),
+            ),
+        )
         val error = assertFailsWith<NotImplementedError> { SbpfMachine(ir).use { it.analyze() } }
         assertContains(error.message.orEmpty(), "pc 1")
+    }
+
+    // Остановка по лимиту шагов — ошибка, а не молча неполный список путей.
+    @Test
+    fun stepLimit() {
+        val ir = program(assign(0, 1, imm(1uL)), assign(1, 2, imm(2uL)), assign(2, 3, imm(3uL)))
+        val options = SbpfMachine.defaultOptions.copy(stepLimit = 1uL)
+        assertFailsWith<IllegalStateException> { SbpfMachine(ir, options).use { it.analyze() } }
     }
 
     @Test

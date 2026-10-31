@@ -40,7 +40,7 @@ class SbpfInterpreter(
             is Exit.Return -> scope.doWithState { exited = true }
             is Stmt.Load, is Stmt.Store, is Stmt.Check,
             is Exit.Next, is Exit.Branch, is Exit.Call, is Exit.Callx, is Exit.Syscall, is Exit.Trap,
-            -> throw NotImplementedError("${step::class.simpleName} at pc ${step.pc} is not supported yet")
+            -> throw NotImplementedError("pc ${step.pc ?: "-"}: ${step::class.simpleName} is not supported yet")
         }
         return scope.stepResult()
     }

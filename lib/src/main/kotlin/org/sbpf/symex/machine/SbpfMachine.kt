@@ -31,7 +31,8 @@ class SbpfMachine(
         val statesCollector = AllStatesCollector<SbpfState>()
         // Лимит читает счётчик наблюдателя: тот же объект обязан быть среди наблюдателей.
         val stepsStatistics = StepsStatistics<IrFunction, SbpfState>()
-        val stopStrategy = options.stepLimit?.let { StepLimitStopStrategy(it, stepsStatistics) } ?: StopStrategy { false }
+        val stopStrategy = options.stepLimit?.let { StepLimitStopStrategy(it, stepsStatistics) }
+            ?: StopStrategy { false }
 
         run(
             interpreter = interpreter,
@@ -41,6 +42,8 @@ class SbpfMachine(
             isStateTerminated = { it.exited },
             stopStrategy = stopStrategy,
         )
+        // Остановка по лимиту шагов теряет незавершённые пути: это ошибка, а не неполный результат.
+        check(pathSelector.isEmpty()) { "step limit ${options.stepLimit} reached, paths are incomplete" }
         return statesCollector.collectedStates
     }
 
@@ -61,7 +64,7 @@ class SbpfMachine(
 
 // r0–r10 в конце пути, вычисленные в модели пути.
 fun SbpfState.registers(): List<ULong> {
-    val model = models.first()
+    val model = requireNotNull(models.firstOrNull()) { "path has no model" }
     return (0 until REGISTER_COUNT).map { index ->
         val value = model.eval(memory.stack.readRegister(index, ctx.bv64Sort)) as KBitVec64Value
         value.longValue.toULong()

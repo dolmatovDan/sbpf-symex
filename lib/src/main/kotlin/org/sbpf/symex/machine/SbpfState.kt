@@ -41,6 +41,8 @@ class SbpfState(
     targets,
 ) {
     // Новый жетон получают обе стороны: со старым оригинал менял бы на месте узлы, общие с копией.
+    // Жетон оригинала обновляется и в самом состоянии, как в JcState (в SampleState этого нет): при откате
+    // неудачного fork StateForker возвращает условиям пути state.ownership.
     override fun clone(newConstraints: UPathConstraints<SbpfType>?): SbpfState {
         val newThisOwnership = MutabilityOwnership()
         val cloneOwnership = MutabilityOwnership()
@@ -48,6 +50,7 @@ class SbpfState(
             this.pathConstraints.changeOwnership(newThisOwnership)
             it.changeOwnership(cloneOwnership)
         } ?: pathConstraints.clone(newThisOwnership, cloneOwnership)
+        this.ownership = newThisOwnership
         return SbpfState(
             ctx,
             cloneOwnership,
@@ -58,7 +61,7 @@ class SbpfState(
             models,
             pathNode,
             forkPoints,
-            targets,
+            targets.clone(),
             exited,
         )
     }

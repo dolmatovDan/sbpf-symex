@@ -20,7 +20,8 @@ fun bin(op: BinOp, a: Expr, b: Expr) = Expr.Bin(op, a, b)
 
 fun assign(pc: Int, dst: Int, value: Expr) = Stmt.Assign(pc, dst, value)
 
-fun block(start: Int, vararg statements: Stmt, exit: Exit) = IrBlock(start, false, statements.toList(), exit)
+fun block(start: Int, vararg statements: Stmt, exit: Exit) =
+    IrBlock(start, noreturn = false, statements = statements.toList(), exit = exit)
 
 fun function(name: String, vararg blocks: IrBlock) = IrFunction(blocks.first().start, name, blocks.toList())
 

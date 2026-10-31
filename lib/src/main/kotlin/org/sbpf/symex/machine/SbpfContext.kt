@@ -8,8 +8,6 @@ import org.usvm.UExpr
 // Ширина выражения IR известна только во время работы, поэтому битвекторы здесь — UExpr<UBvSort>
 // без ширины в типе; ширину проверяют require.
 class SbpfContext(components: SbpfComponents) : UContext<SbpfSizeSort>(components) {
-    fun bvSort(width: Width): UBvSort = mkBvSort(width.bits.toUInt())
-
     // KSMT принимает «сколько бит добавить», а не итоговую ширину.
     fun zextTo(width: Width, x: UExpr<UBvSort>): UExpr<UBvSort> =
         mkBvZeroExtensionExpr(extension(width, x), x)
