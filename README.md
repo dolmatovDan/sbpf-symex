@@ -165,7 +165,7 @@ sbpf-symex/
 - [x] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
 - [x] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
 - [x] `SbpfApplicationGraph`: полный по выходам блоков, исполняются `assign` и `return`
-- [x] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `SampleState`
+- [x] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `JcState.clone` (`SampleState` не обновляет жетон оригинала)
 - [x] `SbpfInterpreter`: `assign`, `return`
 - [x] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
 
