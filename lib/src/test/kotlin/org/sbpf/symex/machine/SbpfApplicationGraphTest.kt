@@ -68,13 +68,16 @@ class SbpfApplicationGraphTest {
         assertEquals(emptyList(), graph.callers(main).toList())
     }
 
-    // Одинаковые statement'ы в разных местах — разные шаги.
+    // Одинаковые statement'ы — разные шаги. С data class a и b были бы одним ключом графа.
     @Test
     fun stepsAreKeyedByIdentity() {
-        val a = assign(0, 1, imm(1uL))
-        val b = assign(1, 1, imm(1uL))
-        val g = SbpfApplicationGraph(module(function("f", block(0, a, b, exit = Exit.Return(2)))))
+        val value = imm(1uL)
+        val a = assign(0, 1, value)
+        val b = assign(0, 1, value)
+        val exit = Exit.Return(1)
+        val g = SbpfApplicationGraph(module(function("f", block(0, a, b, exit = exit))))
         assertEquals(listOf(b), g.successors(a).toList())
+        assertEquals(listOf(exit), g.successors(b).toList())
     }
 
     @Test
