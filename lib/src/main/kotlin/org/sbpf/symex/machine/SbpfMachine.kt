@@ -4,6 +4,8 @@ import io.ksmt.expr.KBitVec64Value
 import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
+import org.sbpf.symex.result.PathResult
+import org.sbpf.symex.result.toPathResult
 import org.usvm.StateCollectionStrategy
 import org.usvm.UExpr
 import org.usvm.UMachine
@@ -52,6 +54,9 @@ class SbpfMachine(
         check(pathSelector.isEmpty()) { "step limit ${options.stepLimit} reached, paths are incomplete" }
         return statesCollector.collectedStates
     }
+
+    // Итоги путей в терминах раннера.
+    fun run(): List<PathResult> = analyze().map { it.toPathResult() }
 
     override fun close() {
         solver.close()

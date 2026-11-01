@@ -4,18 +4,17 @@ import org.sbpf.symex.ir.BinOp
 import org.sbpf.symex.ir.CmpOp
 import org.sbpf.symex.ir.Exit
 import org.sbpf.symex.ir.Expr
-import org.sbpf.symex.ir.ExtOp
 import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Stmt
-import org.sbpf.symex.ir.UnOp
 import org.sbpf.symex.ir.Width
+import org.sbpf.symex.result.PathStatus
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-// Программы из одного блока, ожидания посчитаны руками (как в sbpf-ir, тест asm в crates/sbpf-run/tests/run.rs).
+// Механика машины на программах из одного блока. Семантику инструкций проверяет DiffTest против раннера.
 class SbpfMachineTest {
     private fun registersAfter(module: IrModule) = SbpfMachine(module).use { machine ->
         val states = machine.analyze()
@@ -43,75 +42,6 @@ class SbpfMachineTest {
 
     private fun program(vararg statements: Stmt) =
         module(function("entrypoint", block(0, *statements, exit = Exit.Return(statements.size))))
-
-    private fun lo32(e: Expr) = Expr.Ext(ExtOp.Trunc, Width.W32, e)
-
-    // Как в alu64.s: lddw, add с переполнением, sub, mul по модулю 2^64, neg.
-    @Test
-    fun alu64() {
-        val registers = registersAfter(
-            program(
-                assign(0, 1, imm(0xfffffffffffffffeuL)),
-                assign(1, 1, bin(BinOp.Add, reg(1), imm(5uL))),
-                assign(2, 2, imm(10uL)),
-                assign(3, 2, bin(BinOp.Add, reg(2), reg(1))),
-                assign(4, 2, bin(BinOp.Sub, reg(2), imm(20uL))),
-                assign(5, 4, imm(0x100000001uL)),
-                assign(6, 4, bin(BinOp.Mul, reg(4), reg(4))),
-                assign(7, 9, imm(5uL)),
-                assign(8, 9, Expr.Un(UnOp.Neg, reg(9))),
-                assign(9, 0, imm(0uL)),
-            ),
-        )
-        assertEquals(0uL, registers[0])
-        assertEquals(3uL, registers[1])
-        assertEquals(0xfffffffffffffff9uL, registers[2])
-        assertEquals(0x200000001uL, registers[4])
-        assertEquals(0xfffffffffffffffbuL, registers[9])
-    }
-
-    // add32 расширяет результат знаком, lsh32 и mov32 — нулями; сдвиг на регистр маскируется лифтером.
-    @Test
-    fun alu32() {
-        val registers = registersAfter(
-            program(
-                assign(0, 1, imm(0x7fffffffuL)),
-                assign(1, 1, Expr.Ext(ExtOp.Sext, Width.W64, bin(BinOp.Add, lo32(reg(1)), imm(1uL, Width.W32)))),
-                assign(2, 2, imm(0xffffffff00000003uL)),
-                assign(3, 3, imm(33uL)),
-                assign(
-                    4,
-                    2,
-                    Expr.Ext(
-                        ExtOp.Zext,
-                        Width.W64,
-                        bin(BinOp.Shl, lo32(reg(2)), bin(BinOp.And, lo32(reg(3)), imm(31uL, Width.W32))),
-                    ),
-                ),
-                assign(5, 4, imm(0xdeadbeefcafebabeuL)),
-                assign(6, 5, Expr.Ext(ExtOp.Zext, Width.W64, lo32(reg(4)))),
-            ),
-        )
-        assertEquals(0xffffffff80000000uL, registers[1])
-        assertEquals(6uL, registers[2])
-        assertEquals(0xcafebabeuL, registers[5])
-    }
-
-    // mov64 и чтение только что записанного регистра.
-    @Test
-    fun mov() {
-        val registers = registersAfter(
-            program(
-                assign(0, 4, imm(0xdeadbeefcafebabeuL)),
-                assign(1, 6, reg(4)),
-                assign(2, 7, bin(BinOp.Xor, reg(6), reg(4))),
-                assign(3, 4, imm(1uL)),
-            ),
-        )
-        assertEquals(1uL, registers[4])
-        assertEquals(0xdeadbeefcafebabeuL, registers[6])
-        assertEquals(0uL, registers[7])
-    }
 
     // Регистры на входе — как у VM: их же раннер пишет в первую запись трассы.
     @Test
@@ -167,6 +97,21 @@ class SbpfMachineTest {
     fun traceOfCheck() {
         assertEquals(listOf(0uL, 1uL, 3uL), traceOf(divisorCheck(5uL)).first.map { it.last() })
         assertEquals(listOf(0uL, 1uL), traceOf(divisorCheck(0uL)).first.map { it.last() })
+    }
+
+    // Итог пути в терминах раннера: упавший check — failure с видом ошибки.
+    @Test
+    fun failedCheckResult() {
+        val path = SbpfMachine(divisorCheck(0uL)).use { it.run() }.single()
+        assertEquals(PathStatus.Failure, path.status)
+        assertEquals("DivideByZero", path.error)
+    }
+
+    // Ненулевой r0 на выходе — код ошибки программы, его разбор ещё не сделан.
+    @Test
+    fun exitCodeNotSupported() {
+        val ir = program(assign(0, 0, imm(7uL)))
+        assertFailsWith<NotImplementedError> { SbpfMachine(ir).use { it.run() } }
     }
 
     @Test
