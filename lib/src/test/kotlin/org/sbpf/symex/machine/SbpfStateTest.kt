@@ -1,6 +1,7 @@
 package org.sbpf.symex.machine
 
 import org.sbpf.symex.ir.Exit
+import org.sbpf.symex.ir.Step
 import org.usvm.UMachineOptions
 import org.usvm.collections.immutable.internal.MutabilityOwnership
 import kotlin.test.AfterTest
@@ -14,6 +15,14 @@ class SbpfStateTest {
 
     @AfterTest
     fun close() = ctx.close()
+
+    private fun stateAt(step: Step): SbpfState {
+        val entry = function("main", block(0, exit = Exit.Return(0)))
+        return SbpfState(ctx, MutabilityOwnership(), entry).apply {
+            memory.stack.push(REGISTER_COUNT)
+            newStep(step)
+        }
+    }
 
     // После clone ветки независимы: запись регистра в одной не видна в другой.
     @Test
@@ -45,5 +54,29 @@ class SbpfStateTest {
         val copy = state.clone()
         assertNotSame(before, state.ownership)
         assertNotSame(state.ownership, copy.ownership)
+    }
+
+    // next без pc — не инструкция, записи нет; ja (next с pc) — инструкция.
+    @Test
+    fun traceSkipsNextWithoutPc() {
+        val fallthrough = stateAt(Exit.Next(target = 1))
+        TraceObserver().onStatePeeked(fallthrough)
+        assertEquals(0, fallthrough.trace.size)
+
+        val ja = stateAt(Exit.Next(target = 1, pc = 4))
+        TraceObserver().onStatePeeked(ja)
+        assertEquals(listOf(4), ja.trace.map { it.pc })
+    }
+
+    // Копия наследует трассу до clone, дальше записи расходятся.
+    @Test
+    fun cloneSharesTraceHistory() {
+        val original = stateAt(Exit.Return(7))
+        val observer = TraceObserver()
+        observer.onStatePeeked(original)
+        val copy = original.clone()
+        observer.onStatePeeked(copy)
+        assertEquals(listOf(7), original.trace.map { it.pc })
+        assertEquals(listOf(7, 7), copy.trace.map { it.pc })
     }
 }

@@ -1,9 +1,13 @@
 package org.sbpf.symex.machine
 
 import io.ksmt.expr.KBitVec64Value
+import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
+import org.sbpf.symex.result.PathResult
+import org.sbpf.symex.result.toPathResult
 import org.usvm.StateCollectionStrategy
+import org.usvm.UExpr
 import org.usvm.UMachine
 import org.usvm.UMachineOptions
 import org.usvm.ps.DfsPathSelector
@@ -17,6 +21,8 @@ import org.usvm.stopstrategies.StopStrategy
 class SbpfMachine(
     private val module: IrModule,
     override val options: UMachineOptions = defaultOptions,
+    // Записывать трассу регистров по инструкциям (SbpfState.trace).
+    private val recordTrace: Boolean = false,
 ) : UMachine<SbpfState>() {
     private val graph = SbpfApplicationGraph(module)
     private val ctx = SbpfContext(SbpfComponents(options))
@@ -37,15 +43,20 @@ class SbpfMachine(
         run(
             interpreter = interpreter,
             pathSelector = pathSelector,
-            observer = CompositeUMachineObserver(statesCollector, stepsStatistics),
-            // Флаг, а не «текущий шаг — return»: иначе путь закончился бы до исполнения return.
-            isStateTerminated = { it.exited },
+            observer = CompositeUMachineObserver(
+                listOfNotNull(statesCollector, stepsStatistics, TraceObserver().takeIf { recordTrace }),
+            ),
+            // Итог в состоянии, а не «текущий шаг — return»: иначе путь закончился бы до исполнения return.
+            isStateTerminated = { it.result != null },
             stopStrategy = stopStrategy,
         )
         // Остановка по лимиту шагов теряет незавершённые пути: это ошибка, а не неполный результат.
         check(pathSelector.isEmpty()) { "step limit ${options.stepLimit} reached, paths are incomplete" }
         return statesCollector.collectedStates
     }
+
+    // Итоги путей в терминах раннера.
+    fun results(): List<PathResult> = analyze().map { it.toPathResult() }
 
     override fun close() {
         solver.close()
@@ -63,10 +74,14 @@ class SbpfMachine(
 }
 
 // r0–r10 в конце пути, вычисленные в модели пути.
-fun SbpfState.registers(): List<ULong> {
+fun SbpfState.registers(): List<ULong> =
+    List(REGISTER_COUNT) { valueOf(memory.stack.readRegister(it, ctx.bv64Sort)) }
+
+// Трасса в формате раннера: r0–r10 и pc на каждую запись.
+fun SbpfState.traceValues(): List<List<ULong>> =
+    trace.map { entry -> entry.registers.map { valueOf(it) } + entry.pc.toULong() }
+
+private fun SbpfState.valueOf(expr: UExpr<KBv64Sort>): ULong {
     val model = requireNotNull(models.firstOrNull()) { "path has no model" }
-    return (0 until REGISTER_COUNT).map { index ->
-        val value = model.eval(memory.stack.readRegister(index, ctx.bv64Sort)) as KBitVec64Value
-        value.longValue.toULong()
-    }
+    return (model.eval(expr) as KBitVec64Value).longValue.toULong()
 }

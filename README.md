@@ -26,107 +26,91 @@ IR (JSON, sbpf-lift lift)
 
 - **Загрузка IR.** JSON из `sbpf-lift lift` превращается в `sealed`-иерархии Kotlin: statement'ы, выходы блока и выражения; вид узла у всех — поле `kind`. Проверяются `format_version`, `sbpf_version` (0 или 3), номера регистров (чтение `r0`–`r10`, запись и `callx` — `r0`–`r9`) и то, что константы помещаются в свою ширину. Незнакомые необязательные поля игнорируются, как требует контракт.
 - **Граф программы.** `ApplicationGraph` над функциями и блоками IR: шаг — это statement или выход блока; `pc` есть у всех, кроме `next` без `ja`. Преемники берутся из выходов блоков (`next`, `branch`, `call`...).
-- **Состояние.** Наследник `UState`. Регистры `r0`–`r10` лежат в кадрах `URegistersStack` (`memory.stack`), как описано в `ir.md`: регистр, прочитанный до записи, автоматически становится символом-входом. Остальное — условия пути, pc (`pathNode`), признак завершения, ошибка.
+- **Состояние.** Наследник `UState`. Регистры `r0`–`r10` лежат в кадрах `URegistersStack` (`memory.stack`), как описано в `ir.md`. На входе они константы, как их выставляет VM agave 4.3 (`Entry.kt`): `r1` — начало входного региона, `r2` — адрес данных инструкции, `r10` — вершина стека, остальные 0. Остальное — условия пути, pc (`pathNode`), итог пути `result` (`Exited` — исполнен `exit`, `Failed` — ошибка VM) и трасса.
 - **Интерпретатор.** `UInterpreter.step`: `when` по виду statement'а. Выражения IR один к одному переводятся в битвекторные термы KSMT через `UContext`. `check` — развилка: путь, где условие ложно, завершается ошибкой и тоже попадает в результаты.
-- **Машина.** `UMachine.run` с селектором путей, наблюдателями (сбор завершённых путей, счётчик шагов) и стоп-стратегиями.
-- **Результаты и сравнение.** Из модели завершённого пути берутся значения входов и итоговые регистры. Эталон — конкретный раннер `sbpf-lift run` (Mollusk, тот же код, что у валидатора agave 4.3), а не собственный интерпретатор: свой эталон повторял бы те же ошибки понимания семантики и не видел бы ошибок лифтера.
+- **Машина.** `UMachine.run` с селектором путей, наблюдателями (сбор завершённых путей, счётчик шагов, трасса) и стоп-стратегиями. `TraceObserver` по флагу пишет перед каждой инструкцией `r0`–`r10` и `pc`, как раннер: одна запись на инструкцию, у `check` — на нём самом.
+- **Результаты и сравнение.** Из модели завершённого пути берутся итоговые регистры и трасса; значения входов — когда входы станут символьными. Эталон — конкретный раннер `sbpf-lift run` (Mollusk, тот же код, что у валидатора agave 4.3), а не собственный интерпретатор: свой эталон повторял бы те же ошибки понимания семантики и не видел бы ошибок лифтера.
 
 ## Использование
 
-`SbpfMachine` исполняет программы из одного блока (`assign` и `return`): `SbpfMachine(module).use { m -> m.analyze().map { it.registers() } }` даёт `r0`–`r10` в конце каждого пути. Машина держит солвер Yices и контекст, поэтому регистры читаются до `close`. Остальные разделы появятся по мере готовности.
+`SbpfMachine` исполняет программы из одного блока (`assign`, `check`, `return`): `SbpfMachine(module, recordTrace = true).use { it.results() }` даёт по пути `PathResult` — статус, ошибку, `r0`–`r10` в конце и трассу. Машина держит солвер Yices и контекст, поэтому результаты читаются до `close`. Остальные разделы появятся по мере готовности.
 
 ```sh
 ./gradlew build
 ./gradlew test
 ```
 
-CI (`.github/workflows/ci.yml`) запускает `./gradlew build` на JDK 21.
+Тесты запускают лифтер и раннер `sbpf-lift` из соседней папки `../sbpf-ir` (другой путь — `-PsbpfIr=<путь>`, относительный — от корня репозитория). Задача `buildSbpfLift` перед тестами делает `cargo build --release` в `sbpf-ir`, поэтому нужен Rust. Версия `sbpf-ir` не закреплена: берётся то, что лежит в папке.
+
+CI (`.github/workflows/ci.yml`) скачивает `sbpf-ir` (`main`) рядом, ставит Rust из его `rust-toolchain.toml` с кэшем `target/` и запускает `./gradlew build` на JDK 21.
 
 ## Тестирование
 
 Каждый тест сравнивает символьную машину с раннером на одном и том же контракте:
 
 ```
-X.s / X.rs ──► X.so ──┬── sbpf-lift lift ──► IR JSON ──► sbpf-symex ──► регистры, статус ──┐
-                      └── sbpf-lift run --registers --trace ──► Outcome JSON ──────────────┴─► сравнить
+X.s / X.rs ──► X.so ──┬── sbpf-lift lift ──► IR JSON ──► sbpf-symex ──► статус, регистры, трасса ──┐
+                      └── sbpf-lift run --registers --trace ──► Outcome JSON ───────────────────────┴─► сравнить
 ```
 
-Эталон — раннер, а не собственный интерпретатор IR. Первые тесты — программы на ассемблере из [`sbpf-ir/tests/programs/asm/`](../sbpf-ir/tests/programs/asm) (`alu64`, `alu32`, `shift64`, `shift32`, `divmod`, `mov`, `endian`): один блок, только регистры и арифметика, каждый регистр читается после записи, итог в `r1`–`r9`. Ожидаемые значения уже проверены в `sbpf-ir` (тест `asm` в `crates/sbpf-run/tests/run.rs`).
+Эталон — раннер, а не собственный интерпретатор IR. Первые тесты — программы на ассемблере из [`sbpf-ir/tests/programs/asm/`](../sbpf-ir/tests/programs/asm) (`alu64`, `alu32`, `shift64`, `shift32`, `divmod`, `mov`, `endian`): один блок, только регистры и арифметика (`divmod` — ещё `check` перед делением на регистр).
 
-Тестовая инфраструктура строится **после первой машины**: регистры и арифметика без ветвлений и памяти. Так граница «машина → результат» проектируется по работающей машине, а не вслепую, и тесты с первого дня зелёные, а не помеченные `@Disabled`.
+### Лифтер и раннер вживую
 
-### Фикстуры
+Фикстур нет: `SbpfRunner` (`lib/src/test/kotlin/org/sbpf/symex/runner/`) вызывает `sbpf-lift` прямо из тестов, как TSA вызывает fift.
 
-IR и ответы раннера хранятся в git, поэтому для Kotlin-тестов не нужен Rust, а изменение лифтера или раннера видно в diff:
+- `lift(so)` разбирает IR строгим Json (`ignoreUnknownKeys = false`): так тесты замечают новые поля лифтера.
+- `run(example, version)` исполняет пример раннера с `--registers --trace`. Все примеры указывают на `.v0.so`, поэтому для v3 пишется копия примера с путём `.v3.so`.
+- У задачи `test` входами объявлены бинарь `sbpf-lift`, `tests/examples` и `tests/programs/bin`: после правки лифтера или примеров тесты перезапускаются, а не считаются UP-TO-DATE.
 
-```
-lib/src/test/resources/fixtures/
-├── SOURCE                      # коммит sbpf-ir, из которого сделаны фикстуры
-└── asm/
-    ├── alu64.v0.ir.json        # sbpf-lift lift tests/programs/bin/asm-alu64.v0.so
-    ├── alu64.v0.outcome.json   # sbpf-lift run tests/examples/asm/alu64.json --registers --trace
-    ├── alu64.v3.ir.json
-    ├── alu64.v3.outcome.json
-    └── …
-```
-
-Пересоздаёт их `scripts/gen-fixtures.sh` (путь к лифтеру — `SBPF_IR`, по умолчанию `../sbpf-ir`):
-
-- список программ берётся из `sbpf-ir/tests/examples/asm/*.json`;
-- примеры раннера указывают на `.v0.so`, поэтому для v3 скрипт делает копию примера с путём `.v3.so`;
-- в `SOURCE` записывается коммит `sbpf-ir`;
-- `--check` пересоздаёт фикстуры во временную папку и сравнивает с лежащими в git, так видно, что фикстуры устарели.
+Входы известны (регистры как у VM, данных нет), поэтому у каждой программы ровно один путь.
 
 ### Граница между машиной и тестами
 
-Тесты не знают устройства машины. Они видят только результат путей:
+Тесты не знают устройства машины. Они видят только результат путей, `SbpfMachine.results(): List<PathResult>` (`lib/src/main/kotlin/org/sbpf/symex/result/`):
 
 ```kotlin
-interface SymbolicRunner {
-    fun run(module: IrModule): List<PathResult>
-}
-
 class PathResult(
-    val status: Status,           // success / failure
-    val error: String?,           // вид ошибки, как в Outcome раннера
-    val registers: List<ULong>?,  // r0–r10 в конце пути
+    val status: PathStatus,          // success / failure, как status раннера
+    val error: String?,              // вид ошибки
+    val registers: List<ULong>,      // r0–r10 в конце пути
+    val trace: List<List<ULong>>,    // r0–r10 и pc перед каждой инструкцией
 )
 ```
 
-Его реализует `SbpfMachine`. Позже `PathResult` дополнится моделью входов, а для сравнения по шагам — трассой.
+Ошибка пока — имя `Fault` из IR (`DivideByZero`), а не `InstructionError` раннера; ненулевой `r0` на выходе — `NotImplementedError`. Перевод появится вместе с примерами, которые падают. Позже `PathResult` дополнится моделью входов.
 
 ### Сравнение
 
-Одна общая функция по образцу `compareSymbolicAndConcreteResults` из TSA (`tsa-test/src/main/kotlin/org/ton/test/utils/TestUtils.kt`):
+Одна общая функция `compareWithRunner` (`lib/src/test/kotlin/org/sbpf/symex/Compare.kt`) по образцу `compareSymbolicAndConcreteResults` из TSA (`tsa-test/src/main/kotlin/org/ton/test/utils/TestUtils.kt`):
 
-1. статус и вид ошибки;
-2. регистры — только у успешного пути, у упавшего значения регистров бессмысленны;
-3. при расхождении — первая запись трассы раннера (регистры перед инструкцией и `pc`), с которой не совпадает машина;
-4. для программ без ветвлений — ровно один путь.
+1. ровно один путь;
+2. статус и вид ошибки;
+3. регистры `r0`–`r10` — только у успешного пути, у упавшего значения регистров бессмысленны;
+4. трасса — всегда: промежуточное значение, перекрытое следующей записью в тот же регистр, видно только в ней. Сообщение называет первую расходящуюся запись (индекс, `pc`, регистры).
 
 Модель ответа раннера (`Outcome`: `status`, `error`, `registers`, `trace`) читается по [`sbpf-ir/docs/runner.md`](../sbpf-ir/docs/runner.md). Числа там — `u64`, в Kotlin это `ULong`, не `Long`.
 
-Тесты параметризованные: один случай на каждую пару «программа × версия sBPF», найденную в `fixtures/`, без ручного списка. Новая asm-программа в `sbpf-ir` после пересоздания фикстур сама становится тестом.
+`DiffTest` параметризованный: один случай на каждую пару «пример из `sbpf-ir/tests/examples/asm/` × версия sBPF», без ручного списка. Новый asm-пример в `sbpf-ir` сам становится тестом.
 
 ## Структура
 
-Целевая структура первой версии:
+Структура первой версии:
 
 ```
 sbpf-symex/
 ├── settings.gradle.kts         # подпроекты
 ├── gradle/libs.versions.toml   # версии: usvm (хэш коммита), KSMT, kotlinx
-├── scripts/
-│   └── gen-fixtures.sh         # фикстуры из ../sbpf-ir; --check — проверка свежести
 └── lib/src/
     ├── main/kotlin/org/sbpf/symex/
     │   ├── ir/                 # модель IR и загрузка JSON
-    │   ├── machine/            # SbpfContext, SbpfState, SbpfInterpreter, SbpfMachine,
-    │   │                       # SbpfApplicationGraph, SbpfComponents, перевод выражений
-    │   └── result/             # PathResult, SymbolicRunner; регистры, ошибка и входы из завершённых путей
-    └── test/
-        ├── kotlin/org/sbpf/symex/   # модель Outcome, сравнение, параметризованные тесты
-        └── resources/fixtures/      # IR и ответы раннера, SOURCE
+    │   ├── machine/            # SbpfContext, SbpfState, SbpfInterpreter, SbpfMachine, TraceObserver,
+    │   │                       # SbpfApplicationGraph, SbpfComponents, перевод выражений, Entry (регистры VM)
+    │   └── result/             # PathResult: статус, ошибка, регистры и трасса завершённого пути
+    └── test/kotlin/org/sbpf/symex/
+        ├── runner/             # SbpfRunner (sbpf-lift lift/run вживую), модель Outcome
+        ├── machine/, ir/       # тесты машины и модели IR
+        └── …                   # compareWithRunner, DiffTest
 ```
 
 Образец устройства — `usvm-sample-language` в usvm (`SampleState`, `SampleInterpreter`, `SampleMachine`, `ResultModelConverter`) и анализатор TON [TSA](https://github.com/espritoxyz/tsa) (`TvmMachine`, `TvmStepScopeManager`, дифференциальные тесты в `tsa-test`).
@@ -146,7 +130,7 @@ sbpf-symex/
 - Локальной usvm (`includeBuild("../usvm")` по флагу) пока нет. `buildSrc` usvm импортирует пакет Kotlin DSL-аксессоров с хэшем в имени (`gradle.kotlin.dsl.accessors._466a…`), сгенерированный Gradle 8.11 (версия wrapper usvm). На 9.8.2 и 8.14.4 этот `buildSrc` не компилируется. Когда понадобится править usvm: собирать usvm её собственным Gradle, публиковать в `mavenLocal` и подставлять по флагу, так версия Gradle не важна. Понизить наш wrapper до 8.11 не проверялось, а Kotlin-плагин 2.4 считает Gradle ниже 8.14.4 устаревшим.
 - Нативная Yices в `ksmt-yices` 0.5.26 есть только для linux-x64, mac-arm и windows-x64. На Intel Mac и linux-arm64 тесты с солвером не запустятся.
 - Все артефакты `io.ksmt:*` — ровно той версии, с которой собрана usvm (`usvm/buildSrc/src/main/kotlin/Dependencies.kt`). При конфликте Gradle молча поднимает версию до старшей, и usvm падает во время работы с `NoSuchMethodError`. Проверка: `./gradlew :lib:dependencyInsight --dependency ksmt-core`.
-- Для фикстур нужно окружение `sbpf-ir` (Rust, Solana CLI), см. его README. Для запуска Kotlin-тестов оно не нужно.
+- Для Kotlin-тестов нужны соседняя папка `sbpf-ir` и Rust (toolchain из её `rust-toolchain.toml`): `sbpf-lift` собирается из исходников. Solana CLI не нужен — `.so` тестовых программ лежат в git `sbpf-ir`.
 
 ## План
 
@@ -164,36 +148,34 @@ sbpf-symex/
 ### Первая версия: регистры и арифметика
 - [x] `SbpfContext`: хелперы расширения и усечения (`zext`, `sext`, `trunc` с правильными аргументами KSMT), `bswap`
 - [x] Перевод выражений IR в KSMT: все операции из таблицы `ir.md`
-- [x] `SbpfApplicationGraph`: полный по выходам блоков, исполняются `assign` и `return`
-- [x] `SbpfState`: регистры в `memory.stack`, признак завершения, `clone` по образцу `JcState.clone` (`SampleState` не обновляет жетон оригинала)
-- [x] `SbpfInterpreter`: `assign`, `return`
+- [x] `SbpfApplicationGraph`: полный по выходам блоков, исполняются `assign`, `check` и `return`
+- [x] `SbpfState`: регистры в `memory.stack`, итог пути `result`, `clone` по образцу `JcState.clone` (`SampleState` не обновляет жетон оригинала)
+- [x] `SbpfInterpreter`: `assign`, `return`, `check`
 - [x] `SbpfMachine`: DFS, сбор завершённых путей, лимит шагов, `throwExceptionOnStepFailure = true`
 
 ### Тестовая инфраструктура
-- [ ] `scripts/gen-fixtures.sh`: IR и ответы раннера для `asm/*` под v0 и v3, коммит `sbpf-ir` в `SOURCE`, режим `--check`
-- [ ] Модель ответа раннера `Outcome` по `docs/runner.md` (`ULong`)
-- [ ] Тест: все фикстуры (IR и `Outcome`) загружаются в строгом режиме
-- [ ] `SymbolicRunner` и `PathResult`; `SbpfMachine` реализует `SymbolicRunner`
-- [ ] Общая функция сравнения: статус и ошибка → регистры → первая расходящаяся запись трассы; один путь без ветвлений
-- [ ] Параметризованные тесты по содержимому `fixtures/`
-- [ ] CI: проверка свежести фикстур (`gen-fixtures.sh --check`)
-- [ ] Все 7 asm-программ под v0 и v3 зелёные: регистры `r1`–`r9` совпадают с раннером, путь ровно один
-
-### Символьные входы
-- [ ] Входные регистры — символы `URegisterReading`, итоговые регистры — формулы
-- [ ] Извлечение результата из модели: входы `model.stack.readRegister`, выходы `model.eval`
-- [ ] Тест: один символьный прогон против многих конкретных (программы с подставленной константой на входе; нужен генератор таких программ в `sbpf-ir`)
+- [x] Регистры на входе как у VM agave 4.3 (`r1`, `r2`, `r10`; остальные 0)
+- [x] Трасса машины: `TraceObserver`, одна запись на инструкцию, формат раннера
+- [x] `SbpfRunner`: `sbpf-lift lift` и `run` вживую, без фикстур; сборка `sbpf-lift` из Gradle, входы `sbpf-ir` у задачи `test`
+- [x] Модель ответа раннера `Outcome` по `docs/runner.md` (`ULong`)
+- [x] `PathResult` и `SbpfMachine.results()`
+- [x] Общая функция сравнения: один путь → статус и ошибка → регистры → трасса с первой расходящейся записью
+- [x] `DiffTest` по `sbpf-ir/tests/examples/asm/*.json`, без ручного списка
+- [x] CI: `sbpf-ir` рядом, Rust, кэш `target/`
+- [x] Все 7 asm-программ под v0 и v3 зелёные: статус, регистры `r0`–`r10` и трасса совпадают с раннером, путь ровно один
 
 ### Ветвления и ошибки
-- [ ] Выходы `next`, `branch`, `trap`
-- [ ] `check` — развилка с путём-ошибкой
+- [ ] Выходы `next`, `branch`, `trap`; у `trap ExecutionOverrun` за концом кода записи трассы нет (VM падает до записи)
+- [x] `check` — развилка с путём-ошибкой
+- [ ] Перевод `Fault` и ненулевого `r0` в ошибку раннера (`InstructionError`)
 - [ ] Ограничение циклов
 - [ ] Тест: статус и ошибка совпадают с раннером на всех путях
 
 ### Память
 - [ ] Модель регионов sBPF: input, стек, куча, `ro_region`; расположение в v0 и v3
 - [ ] `load` / `store`, `AccessViolation`
-- [ ] Начальное состояние точки входа: `r1` — указатель на сериализованные аккаунты и данные инструкции, `r10` — стек
+- [ ] Входной регион: сериализованные аккаунты и данные инструкции по адресу `r1`; `r2` с учётом аккаунтов (сейчас — вход без аккаунтов)
+- [ ] Символьные `instruction_data` и аккаунты
 
 ### Вызовы и syscall'ы
 - [ ] `call` / `return` по кадрам (`ir.md`, «`call` и `return`»), `CallDepthExceeded`
@@ -202,7 +184,7 @@ sbpf-symex/
 - [ ] Учёт CU
 
 ### Результаты
-- [ ] Генерация входа раннера (`instruction_data`, аккаунты) из модели пути: каждый найденный путь проверяется конкретным запуском
+- [ ] Генерация входа раннера (`instruction_data`, аккаунты) из модели пути: каждый найденный путь проверяется конкретным запуском через `SbpfRunner`
 - [ ] Прогон на контрактах из `sbpf-ir/tests/programs` и мейннета
 
 ## Ссылки

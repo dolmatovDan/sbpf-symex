@@ -33,6 +33,26 @@ java {
     }
 }
 
+// Тесты сравнивают машину с лифтером и раннером sbpf-ir, запуская sbpf-lift вживую. Версия sbpf-ir не
+// закреплена: берётся соседняя папка (или -PsbpfIr=<путь>) как есть.
+// Относительный путь в -PsbpfIr — от корня репозитория, как и путь по умолчанию.
+val sbpfIr: File = rootDir.resolve(providers.gradleProperty("sbpfIr").getOrElse("../sbpf-ir")).canonicalFile
+
+// cargo сам пропускает сборку, если ничего не менялось.
+val buildSbpfLift = tasks.register<Exec>("buildSbpfLift") {
+    workingDir = sbpfIr
+    commandLine("cargo", "build", "--release", "-p", "sbpf-lift-cli")
+}
+
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    dependsOn(buildSbpfLift)
+    systemProperty("sbpf.ir", sbpfIr.path)
+    // Без этих входов после правки лифтера или раннера тесты считались бы UP-TO-DATE.
+    inputs.file(sbpfIr.resolve("target/release/sbpf-lift"))
+        .withPropertyName("sbpfLift").withPathSensitivity(PathSensitivity.NONE)
+    inputs.dir(sbpfIr.resolve("tests/examples"))
+        .withPropertyName("sbpfIrExamples").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(sbpfIr.resolve("tests/programs/bin"))
+        .withPropertyName("sbpfIrPrograms").withPathSensitivity(PathSensitivity.RELATIVE)
 }
