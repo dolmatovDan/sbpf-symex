@@ -4,7 +4,6 @@ import org.sbpf.symex.machine.REGISTER_COUNT
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.PathStatus
 import org.sbpf.symex.runner.Outcome
-import org.sbpf.symex.runner.Status
 import kotlin.test.assertEquals
 import kotlin.test.fail
 
@@ -16,7 +15,7 @@ import kotlin.test.fail
 fun compareWithRunner(paths: List<PathResult>, outcome: Outcome) {
     assertEquals(1, paths.size, "number of paths")
     val path = paths.single()
-    assertEquals(outcome.status, path.status.toRunner(), "status")
+    assertEquals(outcome.status, path.status, "status")
     assertEquals(outcome.error, path.error, "error")
     val traceDifference = firstTraceDifference(requireNotNull(outcome.trace) { "runner returned no trace" }, path.trace)
     if (path.status == PathStatus.Success) {
@@ -26,11 +25,6 @@ fun compareWithRunner(paths: List<PathResult>, outcome: Outcome) {
         assertEquals(registers.take(REGISTER_COUNT).hex(), path.registers.hex(), message)
     }
     traceDifference?.let { fail(it) }
-}
-
-private fun PathStatus.toRunner() = when (this) {
-    PathStatus.Success -> Status.Success
-    PathStatus.Failure -> Status.Failure
 }
 
 // Первая расходящаяся запись трассы — с неё начинается ошибка; null, если трассы совпадают.

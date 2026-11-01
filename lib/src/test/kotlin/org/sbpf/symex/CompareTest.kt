@@ -4,7 +4,6 @@ import org.sbpf.symex.machine.REGISTER_COUNT
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.PathStatus
 import org.sbpf.symex.runner.Outcome
-import org.sbpf.symex.runner.Status
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
@@ -13,7 +12,7 @@ import kotlin.test.assertFailsWith
 class CompareTest {
     private val registers = List(REGISTER_COUNT) { it.toULong() }
     private val trace = listOf(registers + 0uL, registers + 1uL)
-    private val outcome = Outcome(Status.Success, registers = registers + 1uL, trace = trace)
+    private val outcome = Outcome(PathStatus.Success, registers = registers + 1uL, trace = trace)
 
     private fun path(
         status: PathStatus = PathStatus.Success,
@@ -63,7 +62,7 @@ class CompareTest {
 
     @Test
     fun differentError() {
-        val failure = Outcome(Status.Failure, error = "ProgramFailedToComplete", trace = trace)
+        val failure = Outcome(PathStatus.Failure, error = "ProgramFailedToComplete", trace = trace)
         assertFailsWith<AssertionError> {
             compareWithRunner(listOf(path(PathStatus.Failure, error = "DivideByZero")), failure)
         }

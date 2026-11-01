@@ -1,11 +1,18 @@
 package org.sbpf.symex.result
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.sbpf.symex.machine.SbpfResult
 import org.sbpf.symex.machine.SbpfState
 import org.sbpf.symex.machine.registers
 import org.sbpf.symex.machine.traceValues
 
-enum class PathStatus { Success, Failure }
+// Значения — как status в ответе раннера: тесты читают его JSON прямо в этот enum.
+@Serializable
+enum class PathStatus {
+    @SerialName("success") Success,
+    @SerialName("failure") Failure,
+}
 
 // Итог завершённого пути в терминах раннера (sbpf-ir/docs/runner.md): с ним сравнивается ответ Mollusk.
 class PathResult(

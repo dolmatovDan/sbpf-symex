@@ -4,7 +4,6 @@ import org.sbpf.symex.ir.BinOp
 import org.sbpf.symex.ir.CmpOp
 import org.sbpf.symex.ir.Exit
 import org.sbpf.symex.ir.Expr
-import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Stmt
 import org.sbpf.symex.ir.Width
@@ -16,23 +15,8 @@ import kotlin.test.assertFailsWith
 
 // Механика машины на программах из одного блока. Семантику инструкций проверяет DiffTest против раннера.
 class SbpfMachineTest {
-    private fun registersAfter(module: IrModule) = SbpfMachine(module).use { machine ->
-        val states = machine.analyze()
-        assertEquals(1, states.size, "one path without branches")
-        val state = states.single()
-        assertEquals(SbpfResult.Exited, state.result)
-        state.registers()
-    }
-
-    // Итог и регистры каждого пути.
-    private fun pathsOf(module: IrModule) = SbpfMachine(module).use { machine ->
-        machine.analyze().map { it.result to it.registers() }
-    }
-
-    private fun traceOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { machine ->
-        val state = machine.analyze().single()
-        state.traceValues() to state.registers()
-    }
+    // Путь без ветвлений ровно один; трасса пишется всегда.
+    private fun pathOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { it.results() }.single()
 
     private fun divisorCheck(divisor: ULong) = program(
         assign(0, 1, imm(divisor)),
@@ -46,29 +30,31 @@ class SbpfMachineTest {
     // Регистры на входе — как у VM: их же раннер пишет в первую запись трассы.
     @Test
     fun registersOnEntry() {
-        val registers = registersAfter(program())
+        val path = pathOf(program())
+        assertEquals(PathStatus.Success, path.status)
         val expected = MutableList(REGISTER_COUNT) { 0uL }.apply {
             this[1] = 0x400000000uL
             this[2] = 0x400000010uL
             this[10] = 0x200001000uL
         }
-        assertEquals(expected, registers)
+        assertEquals(expected, path.registers)
     }
 
     // Условие check истинно: развилки нет, путь идёт дальше.
     @Test
     fun checkPasses() {
-        val (result, registers) = pathsOf(divisorCheck(5uL)).single()
-        assertEquals(SbpfResult.Exited, result)
-        assertEquals(1uL, registers[2])
+        val path = pathOf(divisorCheck(5uL))
+        assertEquals(PathStatus.Success, path.status)
+        assertEquals(1uL, path.registers[2])
     }
 
     // Условие ложно: путь завершается ошибкой check, следующая инструкция не исполняется.
     @Test
     fun checkFails() {
-        val (result, registers) = pathsOf(divisorCheck(0uL)).single()
-        assertEquals(SbpfResult.Failed(Fault.DivideByZero), result)
-        assertEquals(entryRegisters()[2], registers[2])
+        val path = pathOf(divisorCheck(0uL))
+        assertEquals(PathStatus.Failure, path.status)
+        assertEquals("DivideByZero", path.error)
+        assertEquals(entryRegisters()[2], path.registers[2])
     }
 
     // Одна запись на инструкцию, состояние перед ней; lddw занимает два слота, как у раннера.
@@ -85,33 +71,25 @@ class SbpfMachineTest {
                 ),
             ),
         )
-        val (trace, registers) = traceOf(ir)
-        assertEquals(listOf(0uL, 2uL, 3uL), trace.map { it.last() })
-        assertEquals(entryRegisters() + 0uL, trace.first())
-        assertEquals(0x100000000uL, trace[1][1])
-        assertEquals(registers + 3uL, trace.last())
+        val path = pathOf(ir)
+        assertEquals(listOf(0uL, 2uL, 3uL), path.trace.map { it.last() })
+        assertEquals(entryRegisters() + 0uL, path.trace.first())
+        assertEquals(0x100000000uL, path.trace[1][1])
+        assertEquals(path.registers + 3uL, path.trace.last())
     }
 
     // check и его инструкция дают одну запись; у упавшего check она тоже есть.
     @Test
     fun traceOfCheck() {
-        assertEquals(listOf(0uL, 1uL, 3uL), traceOf(divisorCheck(5uL)).first.map { it.last() })
-        assertEquals(listOf(0uL, 1uL), traceOf(divisorCheck(0uL)).first.map { it.last() })
-    }
-
-    // Итог пути в терминах раннера: упавший check — failure с видом ошибки.
-    @Test
-    fun failedCheckResult() {
-        val path = SbpfMachine(divisorCheck(0uL)).use { it.results() }.single()
-        assertEquals(PathStatus.Failure, path.status)
-        assertEquals("DivideByZero", path.error)
+        assertEquals(listOf(0uL, 1uL, 3uL), pathOf(divisorCheck(5uL)).trace.map { it.last() })
+        assertEquals(listOf(0uL, 1uL), pathOf(divisorCheck(0uL)).trace.map { it.last() })
     }
 
     // Ненулевой r0 на выходе — код ошибки программы, его разбор ещё не сделан.
     @Test
     fun exitCodeNotSupported() {
         val ir = program(assign(0, 0, imm(7uL)))
-        assertFailsWith<NotImplementedError> { SbpfMachine(ir).use { it.results() } }
+        assertFailsWith<NotImplementedError> { pathOf(ir) }
     }
 
     @Test
