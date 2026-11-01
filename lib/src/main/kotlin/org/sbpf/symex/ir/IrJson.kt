@@ -15,15 +15,15 @@ import kotlin.io.encoding.Base64
 
 const val IR_FORMAT_VERSION = 1
 
-// Незнакомые поля игнорируются: так требует контракт docs/ir.md. Тесты разбирают строже.
-// Вид узла — поле `kind` у statement'ов, выходов блока и выражений.
+// Unknown fields are ignored, as the docs/ir.md contract requires. Tests parse more strictly.
+// The node kind is the `kind` field of statements, block exits and expressions.
 val IrJson = Json {
     ignoreUnknownKeys = true
     classDiscriminator = "kind"
 }
 
-// format_version проверяется до разбора: новый формат даёт понятную ошибку, а не ошибку в его полях.
-// Любая ошибка загрузки — SerializationException.
+// format_version is checked before parsing: a new format gives a clear error rather than an error in its fields.
+// Any load error is a SerializationException.
 fun parseIr(text: String, json: Json = IrJson): IrModule {
     val root = json.parseToJsonElement(text) as? JsonObject ?: fail("IR is not a JSON object")
     val version = root["format_version"]?.int("format_version")
@@ -33,7 +33,7 @@ fun parseIr(text: String, json: Json = IrJson): IrModule {
     return json.decodeFromJsonElement(IrModule.serializer(), root).also(::checkModule)
 }
 
-// Часть Module::validate из лифтера: то, что иначе всплыло бы только в машине.
+// Part of the lifter's Module::validate: things that would otherwise surface only in the machine.
 private fun checkModule(module: IrModule) {
     if (module.sbpfVersion != 0 && module.sbpfVersion != 3) {
         fail("sbpf_version ${module.sbpfVersion}, supported 0 and 3")
@@ -65,7 +65,7 @@ private fun checkModule(module: IrModule) {
     }
 }
 
-// В r10 писать нельзя.
+// r10 must not be written.
 private fun checkDst(dst: Int, at: String) {
     if (dst !in 0..9) fail("$at: write to r$dst")
 }
@@ -89,14 +89,14 @@ private fun checkExpr(expr: Expr, at: String) {
     }
 }
 
-// IR только читается: писать его — дело лифтера.
+// IR is read-only here: writing it is the lifter's job.
 private fun readOnly(): Nothing = throw UnsupportedOperationException("IR is read-only in Kotlin")
 
 private fun fail(message: String): Nothing = throw SerializationException(message)
 
 private val hexFormat = HexFormat { number.prefix = "0x" }
 
-// 64-битные числа в IR — строки "0x…". hexToULong, в отличие от toULong(16), не принимает "+5" и не-ASCII цифры.
+// 64-bit numbers in IR are "0x…" strings. Unlike toULong(16), hexToULong rejects "+5" and non-ASCII digits.
 private fun parseHex(text: String): ULong =
     try {
         text.hexToULong(hexFormat)

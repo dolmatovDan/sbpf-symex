@@ -2,17 +2,17 @@
 
 [versions]
 kotlin = "2.4.10"
-# Коммит usvm на JitPack. Почему не новее — README, «Окружение».
+# usvm commit on JitPack. Why not a newer one: see README, "Environment".
 usvm = "dab6d43261eba1c4e72b35d8eda91763b6494934"
-# KSMT и collections-immutable — ровно те версии, с которыми собрана usvm
-# (usvm/buildSrc/src/main/kotlin/Dependencies.kt), иначе Gradle молча поднимет их и для usvm.
+# KSMT and collections-immutable are exactly the versions usvm is built with
+# (usvm/buildSrc/src/main/kotlin/Dependencies.kt); otherwise Gradle silently bumps them for usvm too.
 ksmt = "0.5.26"
 kotlinx-collections-immutable = "0.3.8"
 kotlinx-serialization = "1.12.0"
 junit-jupiter-engine = "6.0.1"
 
 [libraries]
-# usvm тянет kotlin-bom 2.1.0, который закрепляет kotlin-reflect на 2.1.0 рядом со stdlib 2.4.10.
+# usvm pulls in kotlin-bom 2.1.0, which pins kotlin-reflect to 2.1.0 next to stdlib 2.4.10.
 kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
 usvm-core = { module = "com.github.UnitTestBot.usvm:usvm-core", version.ref = "usvm" }
 ksmt-core = { module = "io.ksmt:ksmt-core", version.ref = "ksmt" }

@@ -5,19 +5,19 @@ import org.sbpf.symex.ir.Stmt
 import org.usvm.UExpr
 import org.usvm.statistics.UMachineObserver
 
-// Регистры r0–r10 перед инструкцией с этим pc. Формулы, а не числа: вычисляются в модели в конце пути.
+// Registers r0–r10 before the instruction at this pc. Formulas, not numbers: evaluated in the model at the end of the path.
 class TraceEntry(val pc: Int, val registers: List<UExpr<KBv64Sort>>)
 
-// Трасса как у раннера (sbpf-ir/docs/runner.md): одна запись на инструкцию, состояние перед ней.
-// Записи лежат в состоянии, а не здесь: при развилке копия наследует историю до точки развилки.
+// Trace as in the runner (sbpf-ir/docs/runner.md): one entry per instruction, holding the state before it.
+// Entries live in the state, not here: on a fork the copy inherits the history up to the fork point.
 class TraceObserver : UMachineObserver<SbpfState> {
     override fun onStatePeeked(state: SbpfState) {
         val step = state.lastStep
-        // next без pc — не инструкция.
+        // next without pc is not an instruction.
         val pc = step.pc ?: return
-        // Запись делается на первом шаге инструкции. check стоит перед своей инструкцией с тем же pc,
-        // поэтому запись делает он, и при упавшем check инструкция, на которой упал путь, в трассе есть.
-        // У корня pathNode (depth 0) шага нет.
+        // The entry is made on the instruction's first step. A check precedes its instruction with the same pc,
+        // so the check makes the entry, and when a check fails the instruction the path failed on is in the trace.
+        // The pathNode root (depth 0) has no step.
         val previous = state.pathNode.parent?.takeIf { it.depth > 0 }?.statement
         if (previous is Stmt.Check && previous.pc == pc) return
         val registers = List(REGISTER_COUNT) { state.memory.stack.readRegister(it, state.ctx.bv64Sort) }

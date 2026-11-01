@@ -45,7 +45,7 @@ class IrJsonTest {
     private fun callxBlock(reg: Int) = """{"start": 0, "noreturn": false, "statements": [],
         "exit": {"kind": "callx", "pc": 0, "reg": $reg, "next": null}}"""
 
-    // Блок bb_85 из примера в docs/ir.md.
+    // Block bb_85 from the example in docs/ir.md.
     @Test
     fun docExampleBlock() {
         val block = decode<IrBlock>(
@@ -135,7 +135,7 @@ class IrJsonTest {
         assertEquals(5, callx.reg)
         assertEquals(8, callx.next)
 
-        // Хэш syscall'а — u32: значения от 2³¹ не помещаются в Int.
+        // A syscall hash is u32: values from 2³¹ up do not fit in Int.
         val syscall = assertIs<Exit.Syscall>(
             decode<Exit>("""{"kind": "syscall", "pc": 7, "hash": 4000000000, "name": null, "next": 8}"""),
         )
@@ -178,7 +178,7 @@ class IrJsonTest {
 
     @Test
     fun formatVersion() {
-        // Версия проверяется до разбора: остальные поля нового формата могут быть любыми.
+        // The version is checked before parsing: the remaining fields of a new format may be anything.
         val newer = assertFailsWith<SerializationException> { parseIr("""{"format_version": 2, "functions": "?"}""") }
         assertContains(newer.message!!, "format_version 2")
 
@@ -204,7 +204,7 @@ class IrJsonTest {
         assertContains(error.message!!, "pc 0")
     }
 
-    // Значения в выражениях проверяются при загрузке модуля: в statement'ах и в условии branch.
+    // Values in expressions are checked when the module is loaded: in statements and in the branch condition.
     @Test
     fun exprValues() {
         val badReg = """{"kind": "reg", "reg": 11}"""

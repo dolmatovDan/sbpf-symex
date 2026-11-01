@@ -6,7 +6,7 @@ plugins {
 
 repositories {
     mavenCentral()
-    // usvm нет в Maven Central: JitPack собирает её по хэшу коммита и отвечает только за её группу.
+    // usvm is not on Maven Central: JitPack builds it from a commit hash and serves only its group.
     exclusiveContent {
         forRepository { maven("https://jitpack.io") }
         filter { includeGroup("com.github.UnitTestBot.usvm") }
@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     implementation(platform(libs.kotlin.bom))
-    // Без exclude для io.ksmt: версии KSMT совпадают с usvm (libs.versions.toml).
+    // No exclude for io.ksmt: KSMT versions match usvm's (libs.versions.toml).
     implementation(libs.usvm.core)
     implementation(libs.ksmt.core)
     implementation(libs.ksmt.yices)
@@ -33,12 +33,12 @@ java {
     }
 }
 
-// Тесты сравнивают машину с лифтером и раннером sbpf-ir, запуская sbpf-lift вживую. Версия sbpf-ir не
-// закреплена: берётся соседняя папка (или -PsbpfIr=<путь>) как есть.
-// Относительный путь в -PsbpfIr — от корня репозитория, как и путь по умолчанию.
+// Tests compare the machine with the sbpf-ir lifter and runner by running sbpf-lift live. The sbpf-ir version is not
+// pinned: the sibling directory (or -PsbpfIr=<path>) is used as is.
+// A relative path in -PsbpfIr is resolved from the repository root, like the default path.
 val sbpfIr: File = rootDir.resolve(providers.gradleProperty("sbpfIr").getOrElse("../sbpf-ir")).canonicalFile
 
-// cargo сам пропускает сборку, если ничего не менялось.
+// cargo skips the build itself if nothing changed.
 val buildSbpfLift = tasks.register<Exec>("buildSbpfLift") {
     workingDir = sbpfIr
     commandLine("cargo", "build", "--release", "-p", "sbpf-lift-cli")
@@ -48,7 +48,7 @@ tasks.named<Test>("test") {
     useJUnitPlatform()
     dependsOn(buildSbpfLift)
     systemProperty("sbpf.ir", sbpfIr.path)
-    // Без этих входов после правки лифтера или раннера тесты считались бы UP-TO-DATE.
+    // Without these inputs, tests would be considered UP-TO-DATE after a change to the lifter or runner.
     inputs.file(sbpfIr.resolve("target/release/sbpf-lift"))
         .withPropertyName("sbpfLift").withPathSensitivity(PathSensitivity.NONE)
     inputs.dir(sbpfIr.resolve("tests/examples"))

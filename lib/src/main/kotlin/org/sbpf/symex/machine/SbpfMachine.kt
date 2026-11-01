@@ -17,11 +17,11 @@ import org.usvm.statistics.collectors.AllStatesCollector
 import org.usvm.stopstrategies.StepLimitStopStrategy
 import org.usvm.stopstrategies.StopStrategy
 
-// Сборка по образцу SampleMachine и TvmMachine: граф → компоненты → контекст → солвер → интерпретатор.
+// Assembled like SampleMachine and TvmMachine: graph -> components -> context -> solver -> interpreter.
 class SbpfMachine(
     private val module: IrModule,
     override val options: UMachineOptions = defaultOptions,
-    // Записывать трассу регистров по инструкциям (SbpfState.trace).
+    // Record the per-instruction register trace (SbpfState.trace).
     private val recordTrace: Boolean = false,
 ) : UMachine<SbpfState>() {
     private val graph = SbpfApplicationGraph(module)
@@ -29,13 +29,13 @@ class SbpfMachine(
     private val solver = ctx.solver<SbpfType>()
     private val interpreter = SbpfInterpreter(ctx, graph)
 
-    // Сырые завершённые состояния, как TvmMachine.analyze.
+    // Raw finished states, like TvmMachine.analyze.
     fun analyze(): List<SbpfState> {
         val pathSelector = DfsPathSelector<SbpfState>()
         pathSelector.add(listOf(interpreter.getInitialState(module)))
 
         val statesCollector = AllStatesCollector<SbpfState>()
-        // Лимит читает счётчик наблюдателя: тот же объект обязан быть среди наблюдателей.
+        // The limit reads the observer's counter: the same object must be among the observers.
         val stepsStatistics = StepsStatistics<IrFunction, SbpfState>()
         val stopStrategy = options.stepLimit?.let { StepLimitStopStrategy(it, stepsStatistics) }
             ?: StopStrategy { false }
@@ -46,16 +46,16 @@ class SbpfMachine(
             observer = CompositeUMachineObserver(
                 listOfNotNull(statesCollector, stepsStatistics, TraceObserver().takeIf { recordTrace }),
             ),
-            // Итог в состоянии, а не «текущий шаг — return»: иначе путь закончился бы до исполнения return.
+            // The outcome is in the state, not "the current step is return": otherwise the path would end before return executes.
             isStateTerminated = { it.result != null },
             stopStrategy = stopStrategy,
         )
-        // Остановка по лимиту шагов теряет незавершённые пути: это ошибка, а не неполный результат.
+        // Stopping on the step limit loses unfinished paths: this is an error, not a partial result.
         check(pathSelector.isEmpty()) { "step limit ${options.stepLimit} reached, paths are incomplete" }
         return statesCollector.collectedStates
     }
 
-    // Итоги путей в терминах раннера.
+    // Path outcomes in runner terms.
     fun results(): List<PathResult> = analyze().map { it.toPathResult() }
 
     override fun close() {
@@ -64,7 +64,7 @@ class SbpfMachine(
     }
 
     companion object {
-        // Исключение в шаге — ошибка машины, а не потерянный путь.
+        // An exception in a step is a machine error, not a lost path.
         val defaultOptions = UMachineOptions(
             stateCollectionStrategy = StateCollectionStrategy.ALL,
             stepLimit = 100_000uL,
@@ -73,11 +73,11 @@ class SbpfMachine(
     }
 }
 
-// r0–r10 в конце пути, вычисленные в модели пути.
+// r0–r10 at the end of the path, evaluated in the path's model.
 fun SbpfState.registers(): List<ULong> =
     List(REGISTER_COUNT) { valueOf(memory.stack.readRegister(it, ctx.bv64Sort)) }
 
-// Трасса в формате раннера: r0–r10 и pc на каждую запись.
+// Trace in runner format: r0–r10 and pc per entry.
 fun SbpfState.traceValues(): List<List<ULong>> =
     trace.map { entry -> entry.registers.map { valueOf(it) } + entry.pc.toULong() }
 

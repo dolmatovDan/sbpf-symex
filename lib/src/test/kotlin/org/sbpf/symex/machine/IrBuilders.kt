@@ -11,7 +11,7 @@ import org.sbpf.symex.ir.RoRegion
 import org.sbpf.symex.ir.Stmt
 import org.sbpf.symex.ir.Width
 
-// IR для тестов машины собирается конструкторами модели, без JSON.
+// IR for machine tests is built with the model's constructors, without JSON.
 
 fun reg(index: Int) = Expr.Reg(index)
 

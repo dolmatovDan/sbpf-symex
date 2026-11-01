@@ -9,7 +9,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertSame
 
 class ExprJsonTest {
-    // Строгий режим: новое поле от лифтера должно ронять тест, а не теряться молча.
+    // Strict mode: a new field from the lifter must fail the test rather than be silently dropped.
     private val strict = Json(IrJson) { ignoreUnknownKeys = false }
 
     private fun expr(text: String, json: Json = strict) = json.decodeFromString<Expr>(text)
@@ -60,11 +60,11 @@ class ExprJsonTest {
             """{"kind": "bin", "op": "add", "a": $r1}""",
             """{"kind": "ext", "op": "zext", "a": $r1}""",
             """{"kind": "bin", "op": "sdiv", "a": $r1, "b": $r2}""",
-            // Операция чужого вида.
+            // An operation of a different kind.
             """{"kind": "bin", "op": "eq", "a": $r1, "b": $r2}""",
             """{"kind": "un", "op": "zext", "a": $r1}""",
         )) {
-            // Структура выражения проверяется и в основном режиме, не только в строгом.
+            // Expression structure is checked in the default mode too, not only in strict mode.
             assertFailsWith<SerializationException>(bad) { expr(bad, IrJson) }
         }
     }

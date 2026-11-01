@@ -17,7 +17,7 @@ enum class Width(val bits: Int) {
     }
 }
 
-// Имя операции в IR задаёт @SerialName; irName читает его же, чтобы не держать второй копии.
+// The IR operation name is set by @SerialName; irName reads the same value to avoid keeping a second copy.
 
 @Serializable
 enum class BinOp {
@@ -69,8 +69,8 @@ enum class CmpOp {
     val irName: String get() = serializer().descriptor.getElementName(ordinal)
 }
 
-// `kind` в JSON задаёт вид узла, `op` — операцию внутри вида.
-// toString — текстовая запись IR, как у `sbpf-lift ir` (print.rs).
+// `kind` in JSON sets the node kind, `op` the operation within the kind.
+// toString is the IR text form, as in `sbpf-lift ir` (print.rs).
 @Serializable
 sealed interface Expr {
     @Serializable

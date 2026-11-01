@@ -18,27 +18,27 @@ import kotlin.io.path.deleteRecursively
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
-// Лифтер и раннер sbpf-ir (бинарь sbpf-lift), запускаемые вживую: эталон для сравнения с машиной.
-// Собирает sbpf-lift Gradle-задача buildSbpfLift, путь к sbpf-ir приходит в свойстве sbpf.ir.
+// The sbpf-ir lifter and runner (the sbpf-lift binary), run live: the reference the machine is compared against.
+// sbpf-lift is built by the Gradle task buildSbpfLift; the path to sbpf-ir comes in the sbpf.ir property.
 class SbpfRunner(sbpfIr: Path) {
     private val binary = sbpfIr.resolve("target/release/sbpf-lift")
 
-    // Примеры раннера: tests/examples/<контракт>/*.json.
+    // Runner examples: tests/examples/<contract>/*.json.
     val examples: Path = sbpfIr.resolve("tests/examples")
 
-    // Строгий разбор: без фикстур это единственное место, где тесты заметят новое поле лифтера.
+    // Strict parsing: without fixtures this is the only place where tests notice a new lifter field.
     fun lift(program: Path): IrModule =
         parseIr(execute("lift", program.toString()), Json(IrJson) { ignoreUnknownKeys = false })
 
     fun run(example: Path, version: Int): Outcome = withTempDir { dir ->
-        // Пути в примере — относительно его файла, а копия лежит в другой папке.
+        // Paths in an example are relative to its file, but the copy lives in another directory.
         val program = JsonPrimitive(programOf(example, version).toString())
         val copy = JsonObject(readExample(example) + ("program" to program))
         val file = dir.resolve(example.fileName).apply { writeText(copy.toString()) }
         OutcomeJson.decodeFromString<Outcome>(execute("run", file.toString(), "--registers", "--trace"))
     }
 
-    // Все примеры указывают на .v0.so; программа под версию — соседний .v<version>.so.
+    // All examples point to .v0.so; the program for a given version is the sibling .v<version>.so.
     fun programOf(example: Path, version: Int): Path {
         val program = readExample(example).getValue("program").jsonPrimitive.content
         require(program.endsWith(".v0.so")) { "$example: program $program is not .v0.so" }
@@ -47,9 +47,9 @@ class SbpfRunner(sbpfIr: Path) {
 
     private fun readExample(example: Path) = Json.parseToJsonElement(example.readText()).jsonObject
 
-    // Вывод — в файл (-o), stderr — в файл, stdout отбрасывается: не нужно читать потоки параллельно,
-    // как в TSA executeCommandWithTimeout, и полный буфер канала не повесит процесс. Таймаут — чтобы
-    // зависший раннер не вешал тесты.
+    // Output goes to a file (-o), stderr to a file, stdout is discarded: no need to read the streams in parallel
+    // as TSA's executeCommandWithTimeout does, and a full pipe buffer won't hang the process. The timeout keeps
+    // a hung runner from hanging the tests.
     private fun execute(vararg args: String): String = withTempDir { dir ->
         val output = dir.resolve("output.json")
         val errors = dir.resolve("stderr.txt").toFile()

@@ -24,7 +24,7 @@ class SbpfStateTest {
         }
     }
 
-    // После clone ветки независимы: запись регистра в одной не видна в другой.
+    // After clone the branches are independent: a register write in one is not visible in the other.
     @Test
     fun cloneSeparatesRegisters() = with(ctx) {
         val entry = function("main", block(0, exit = Exit.Return(0)))
@@ -39,13 +39,13 @@ class SbpfStateTest {
         assertEquals(mkBv(1L), original.memory.stack.readRegister(1, bv64Sort))
         assertEquals(mkBv(2L), copy.memory.stack.readRegister(1, bv64Sort))
         assertEquals(mkBv(3L), original.memory.stack.readRegister(2, bv64Sort))
-        // В копии r2 не записан: чтение даёт символ-вход, а не 3.
+        // r2 is not written in the copy: reading it yields the input symbol, not 3.
         assertNotEquals(mkBv(3L), copy.memory.stack.readRegister(2, bv64Sort))
         assertEquals(mkRegisterReading(2, bv64Sort), copy.memory.stack.readRegister(2, bv64Sort))
     }
 
-    // Оригинал после clone держит новый жетон: откат неудачного fork в StateForker вернёт условиям пути его,
-    // а не старый, общий с копией.
+    // After clone the original holds a new ownership token: rolling back a failed fork in StateForker restores it
+    // to the path constraints, not the old one shared with the copy.
     @Test
     fun cloneRenewsOriginalOwnership() {
         val entry = function("main", block(0, exit = Exit.Return(0)))
@@ -56,7 +56,7 @@ class SbpfStateTest {
         assertNotSame(state.ownership, copy.ownership)
     }
 
-    // next без pc — не инструкция, записи нет; ja (next с pc) — инструкция.
+    // next without pc is not an instruction, so no entry; ja (next with pc) is an instruction.
     @Test
     fun traceSkipsNextWithoutPc() {
         val fallthrough = stateAt(Exit.Next(target = 1))
@@ -68,7 +68,7 @@ class SbpfStateTest {
         assertEquals(listOf(4), ja.trace.map { it.pc })
     }
 
-    // Копия наследует трассу до clone, дальше записи расходятся.
+    // The copy inherits the trace up to clone; after that the entries diverge.
     @Test
     fun cloneSharesTraceHistory() {
         val original = stateAt(Exit.Return(7))

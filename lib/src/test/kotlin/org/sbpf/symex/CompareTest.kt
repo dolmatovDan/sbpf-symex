@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
 
-// Сама функция сравнения: на настоящих примерах машина и раннер совпадают, и ветки расхождений не исполняются.
+// The comparison function itself: on real examples the machine and runner agree, so the mismatch branches never run.
 class CompareTest {
     private val registers = List(REGISTER_COUNT) { it.toULong() }
     private val trace = listOf(registers + 0uL, registers + 1uL)
@@ -33,7 +33,7 @@ class CompareTest {
         assertFailsWith<AssertionError> { compareWithRunner(listOf(path(PathStatus.Failure)), outcome) }
     }
 
-    // Итоговые регистры совпадают, расходится промежуточная запись: сообщение называет её pc и регистр.
+    // Final registers match, an intermediate entry differs: the message names its pc and register.
     @Test
     fun traceDiffers() {
         val wrong = listOf(trace[0].toMutableList().apply { this[3] = 7uL }, trace[1])
@@ -50,7 +50,7 @@ class CompareTest {
         assertContains(error.message.orEmpty(), "entry 1 (pc 1)")
     }
 
-    // Лишняя запись машины — например, вторая запись на инструкцию после check.
+    // An extra machine entry, e.g. a second entry for an instruction after a check.
     @Test
     fun traceLonger() {
         val error = assertFailsWith<AssertionError> {
@@ -68,7 +68,7 @@ class CompareTest {
         }
     }
 
-    // Запись машины без pc: понятное сообщение вместо исключения при разборе записи.
+    // A machine entry without pc: a clear message instead of an exception while parsing the entry.
     @Test
     fun traceEntryWidth() {
         val error = assertFailsWith<AssertionError> {

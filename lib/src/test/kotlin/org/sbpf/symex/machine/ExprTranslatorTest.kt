@@ -14,12 +14,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-// Все аргументы — константы: KSMT сворачивает выражение в число, его и сравниваем.
-// Значения подобраны так, чтобы перепутанные соседние операции давали разный результат.
+// All arguments are constants: KSMT folds the expression into a number, which is what we compare.
+// Values are chosen so that swapping adjacent operations gives a different result.
 class ExprTranslatorTest {
     private val ctx = SbpfContext(SbpfComponents(UMachineOptions()))
 
-    // r1 = 0x7fffffff, остальные регистры не нужны.
+    // r1 = 0x7fffffff; the other registers are not needed.
     private val translator = ExprTranslator(ctx) { index ->
         require(index == 1) { "unexpected r$index" }
         ctx.mkBv(0x7fffffffL, 64u)
@@ -61,7 +61,7 @@ class ExprTranslatorTest {
 
     @Test
     fun cmp() {
-        // На этих четырёх парах у всех десяти сравнений разные ответы: перепутанная операция не пройдёт.
+        // On these four pairs all ten comparisons give different answers: a swapped operation will not pass.
         val minusOne = ULong.MAX_VALUE
         val pairs = listOf(5uL to 5uL, minusOne to 1uL, 1uL to minusOne, 1uL to 2uL)
         val cases = mapOf(
@@ -103,19 +103,19 @@ class ExprTranslatorTest {
         assertEquals(0xdef0uL, value(Expr.Ext(ExtOp.Trunc, Width.W16, imm(0x123456789abcdef0uL))))
         assertEquals(64, bits(Expr.Ext(ExtOp.Zext, Width.W64, byte)))
         assertEquals(16, bits(Expr.Ext(ExtOp.Trunc, Width.W16, imm(1uL))))
-        // Расширение до той же ширины — без изменений.
+        // Extending to the same width is a no-op.
         assertEquals(5uL, value(Expr.Ext(ExtOp.Sext, Width.W64, imm(5uL))))
         assertFailsWith<IllegalArgumentException> { translator.bv(Expr.Ext(ExtOp.Zext, Width.W8, imm(1uL))) }
         assertFailsWith<IllegalArgumentException> { translator.bv(Expr.Ext(ExtOp.Trunc, Width.W64, byte)) }
     }
 
-    // Семантика SMT, а не переводчика: сдвиг на ≥ N даёт 0. Лифтер маскирует сдвиг на регистр сам.
+    // SMT semantics, not the translator's: a shift by >= N gives 0. The lifter masks register shifts itself.
     @Test
     fun shiftByWidthIsZero() {
         assertEquals(0uL, value(bin(BinOp.Lshr, imm(0x8000000000000000uL), imm(64uL))))
     }
 
-    // add32 r1, 1 при r1 = 0x7fffffff: sext64(add(lo32(r1), 1:32)).
+    // add32 r1, 1 with r1 = 0x7fffffff: sext64(add(lo32(r1), 1:32)).
     @Test
     fun add32() {
         val lo32 = Expr.Ext(ExtOp.Trunc, Width.W32, reg(1))

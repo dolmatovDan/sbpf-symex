@@ -10,7 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
 
-// Ошибка версий KSMT/usvm видна только во время работы (NoSuchMethodError), поэтому зависимости проверяются вызовами.
+// A KSMT/usvm version mismatch shows up only at runtime (NoSuchMethodError), so dependencies are checked by calling them.
 class DependenciesTest {
     @Test
     fun yicesSolvesBitVectorFormula() = KContext().use { ctx ->

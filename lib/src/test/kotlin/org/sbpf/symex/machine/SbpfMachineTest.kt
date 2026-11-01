@@ -13,9 +13,9 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-// Механика машины на программах из одного блока. Семантику инструкций проверяет DiffTest против раннера.
+// Machine mechanics on single-block programs. Instruction semantics are checked by DiffTest against the runner.
 class SbpfMachineTest {
-    // Путь без ветвлений ровно один; трасса пишется всегда.
+    // Without branches there is exactly one path; the trace is always recorded.
     private fun pathOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { it.results() }.single()
 
     private fun divisorCheck(divisor: ULong) = program(
@@ -27,7 +27,7 @@ class SbpfMachineTest {
     private fun program(vararg statements: Stmt) =
         module(function("entrypoint", block(0, *statements, exit = Exit.Return(statements.size))))
 
-    // Регистры на входе — как у VM: их же раннер пишет в первую запись трассы.
+    // Entry registers match the VM's: the runner writes the same values into the first trace entry.
     @Test
     fun registersOnEntry() {
         val path = pathOf(program())
@@ -40,7 +40,7 @@ class SbpfMachineTest {
         assertEquals(expected, path.registers)
     }
 
-    // Условие check истинно: развилки нет, путь идёт дальше.
+    // The check condition is true: no fork, the path continues.
     @Test
     fun checkPasses() {
         val path = pathOf(divisorCheck(5uL))
@@ -48,7 +48,7 @@ class SbpfMachineTest {
         assertEquals(1uL, path.registers[2])
     }
 
-    // Условие ложно: путь завершается ошибкой check, следующая инструкция не исполняется.
+    // The condition is false: the path ends with a check error, the next instruction is not executed.
     @Test
     fun checkFails() {
         val path = pathOf(divisorCheck(0uL))
@@ -57,7 +57,7 @@ class SbpfMachineTest {
         assertEquals(entryRegisters()[2], path.registers[2])
     }
 
-    // Одна запись на инструкцию, состояние перед ней; lddw занимает два слота, как у раннера.
+    // One entry per instruction, holding the state before it; lddw takes two slots, as in the runner.
     @Test
     fun trace() {
         val ir = module(
@@ -78,14 +78,14 @@ class SbpfMachineTest {
         assertEquals(path.registers + 3uL, path.trace.last())
     }
 
-    // check и его инструкция дают одну запись; у упавшего check она тоже есть.
+    // A check and its instruction produce one entry; a failed check has one too.
     @Test
     fun traceOfCheck() {
         assertEquals(listOf(0uL, 1uL, 3uL), pathOf(divisorCheck(5uL)).trace.map { it.last() })
         assertEquals(listOf(0uL, 1uL), pathOf(divisorCheck(0uL)).trace.map { it.last() })
     }
 
-    // Ненулевой r0 на выходе — код ошибки программы, его разбор ещё не сделан.
+    // A nonzero r0 at exit is the program's error code; decoding it is not implemented yet.
     @Test
     fun exitCodeNotSupported() {
         val ir = program(assign(0, 0, imm(7uL)))
@@ -106,7 +106,7 @@ class SbpfMachineTest {
         assertContains(error.message.orEmpty(), "pc 1")
     }
 
-    // Остановка по лимиту шагов — ошибка, а не молча неполный список путей.
+    // Stopping on the step limit is an error, not a silently incomplete list of paths.
     @Test
     fun stepLimit() {
         val ir = program(assign(0, 1, imm(1uL)), assign(1, 2, imm(2uL)), assign(2, 3, imm(3uL)))

@@ -14,10 +14,10 @@ import org.usvm.types.UTypeSystem
 import org.usvm.types.emptyTypeStream
 import kotlin.time.Duration
 
-// Размерный сорт usvm (длины массивов, адреса объектов). Пока не используется: его выберет модель памяти.
+// usvm size sort (array lengths, object addresses). Unused for now: the memory model will choose it.
 typealias SbpfSizeSort = UBv32Sort
 
-// Объектов и типов в sBPF нет: система типов — заглушка, как SampleTypeSystem.
+// sBPF has no objects or types: the type system is a stub, like SampleTypeSystem.
 object SbpfType
 
 class SbpfTypeSystem(override val typeOperationsTimeout: Duration) : UTypeSystem<SbpfType> {
@@ -34,7 +34,7 @@ class SbpfTypeSystem(override val typeOperationsTimeout: Duration) : UTypeSystem
     override fun topTypeStream(): UTypeStream<SbpfType> = emptyTypeStream()
 }
 
-// Солвер — только Yices: options.solverType не читается, Z3 в зависимостях нет.
+// The solver is Yices only: options.solverType is not read, and Z3 is not among the dependencies.
 class SbpfComponents(private val options: UMachineOptions) : UComponents<SbpfType, SbpfSizeSort> {
     private val typeSystem = SbpfTypeSystem(options.typeOperationsTimeout)
 

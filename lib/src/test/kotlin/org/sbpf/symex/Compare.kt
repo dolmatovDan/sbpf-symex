@@ -7,11 +7,11 @@ import org.sbpf.symex.runner.Outcome
 import kotlin.test.assertEquals
 import kotlin.test.fail
 
-// Сравнение путей машины с ответом раннера, по образцу compareSymbolicAndConcreteResults из TSA
-// (tsa-test/.../TestUtils.kt): статус и ошибка, затем регистры (только у успешного пути: у упавшего
-// они бессмысленны), затем трасса. Трасса сравнивается всегда: промежуточное значение, перекрытое
-// следующей записью в тот же регистр, видно только в ней.
-// Входы известны, поэтому путь ровно один.
+// Compares machine paths with the runner's response, modeled on compareSymbolicAndConcreteResults from TSA
+// (tsa-test/.../TestUtils.kt): status and error, then registers (only for a successful path: for a failed one
+// they are meaningless), then the trace. The trace is always compared: an intermediate value overwritten
+// by a later write to the same register is visible only there.
+// Inputs are known, so there is exactly one path.
 fun compareWithRunner(paths: List<PathResult>, outcome: Outcome) {
     assertEquals(1, paths.size, "number of paths")
     val path = paths.single()
@@ -20,14 +20,14 @@ fun compareWithRunner(paths: List<PathResult>, outcome: Outcome) {
     val traceDifference = firstTraceDifference(requireNotNull(outcome.trace) { "runner returned no trace" }, path.trace)
     if (path.status == PathStatus.Success) {
         val registers = requireNotNull(outcome.registers) { "runner returned no registers" }
-        // Место ошибки показывает трасса, поэтому её расхождение — в том же сообщении.
+        // The trace shows where the error happened, so its mismatch goes into the same message.
         val message = "registers r0–r10; ${traceDifference ?: "trace matches"}"
         assertEquals(registers.take(REGISTER_COUNT).hex(), path.registers.hex(), message)
     }
     traceDifference?.let { fail(it) }
 }
 
-// Первая расходящаяся запись трассы — с неё начинается ошибка; null, если трассы совпадают.
+// The first mismatching trace entry, where the error starts; null if the traces match.
 private fun firstTraceDifference(expected: List<List<ULong>>, actual: List<List<ULong>>): String? {
     val index = expected.indices.firstOrNull { it >= actual.size || expected[it] != actual[it] }
         ?: if (actual.size > expected.size) expected.size else return null

@@ -3,8 +3,8 @@ package org.sbpf.symex.ir
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Формат и семантика — sbpf-ir/docs/ir.md. Классы обычные, не data: одинаковые statement'ы
-// в разных местах программы — разные шаги и разные ключи графа.
+// Format and semantics: sbpf-ir/docs/ir.md. Classes are plain, not data: identical statements
+// in different places of the program are distinct steps and distinct graph keys.
 
 @Serializable
 class IrModule(
@@ -45,8 +45,8 @@ enum class Fault {
     ExecutionOverrun,
 }
 
-// Шаг машины: statement или выход блока. В JSON его нет, это общий тип узлов графа программы.
-// pc нет только у выхода `next` без инструкции `ja`.
+// A machine step: a statement or a block exit. It is absent from JSON; it is the common node type of the program graph.
+// Only a `next` exit without a `ja` instruction has no pc.
 sealed interface Step {
     val pc: Int?
 }
@@ -72,10 +72,10 @@ sealed interface Stmt : Step {
     class Check(override val pc: Int, val cond: Expr, val error: Fault) : Stmt
 }
 
-// `next` у вызовов — null, если вызов последний в программе; поле при этом обязательно.
+// `next` of a call is null if the call is the last one in the program; the field is still required.
 @Serializable
 sealed interface Exit : Step {
-    // Без `pc` — продолжение в следующий блок, с `pc` — инструкция `ja`.
+    // Without `pc`, falls through to the next block; with `pc`, it is a `ja` instruction.
     @Serializable
     @SerialName("next")
     class Next(val target: Int, override val pc: Int? = null) : Exit

@@ -3,12 +3,12 @@ package org.sbpf.symex.runner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// Проверяется только наша обвязка: поведение самого раннера проверяют тесты sbpf-ir (asm, registers_and_trace).
+// Only our wrapper is tested here: the runner's own behavior is covered by sbpf-ir tests (asm, registers_and_trace).
 class SbpfRunnerTest {
     private val runner = SbpfRunner.fromSystemProperty()
     private val alu64 = runner.examples.resolve("asm/alu64.json")
 
-    // Пример указывает на .v0.so: под v3 лифтер должен получить другой файл.
+    // The example points to .v0.so: for v3 the lifter must receive a different file.
     @Test
     fun programOfVersion() {
         for (version in listOf(0, 3)) {

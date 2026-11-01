@@ -7,8 +7,8 @@ import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
 import org.usvm.statistics.ApplicationGraph
 
-// Шаг — statement или выход блока. Преемник statement'а — следующий шаг блока, преемники выхода —
-// первые шаги блоков, куда он ведёт. Шаги — обычные классы, поэтому ключи по идентичности.
+// A step is a statement or a block exit. A statement's successor is the next step of its block; an exit's successors are
+// the first steps of the blocks it leads to. Steps are plain classes, so keys are by identity.
 class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step> {
     private val blocks = module.functions.flatMap { it.blocks }.associateBy { it.start }
     private val functions = module.functions.associateBy { it.entry }
@@ -43,7 +43,7 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
 
     override fun callers(method: IrFunction) = callers[method].orEmpty().asSequence()
 
-    // Первый блок функции начинается с entry.
+    // A function's first block starts at entry.
     override fun entryPoints(method: IrFunction) = sequenceOf(firstStep(block(method.entry)))
 
     override fun exitPoints(method: IrFunction) =
@@ -55,10 +55,10 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
 
     private fun steps(block: IrBlock): List<Step> = block.statements + block.exit
 
-    // У пустого блока первый шаг — сам выход.
+    // For an empty block, the first step is the exit itself.
     private fun firstStep(block: IrBlock): Step = block.statements.firstOrNull() ?: block.exit
 
-    // Вызовы продолжаются в месте возврата: куда идёт вызванная функция, говорит callees.
+    // Calls continue at the return site: callees tells where the called function goes.
     private fun exitTargets(exit: Exit): List<Int> = when (exit) {
         is Exit.Next -> listOf(exit.target)
         is Exit.Branch -> listOf(exit.thenTarget, exit.elseTarget)

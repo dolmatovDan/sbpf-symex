@@ -9,8 +9,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class SbpfApplicationGraphTest {
-    // main: [0] два assign → branch на 3 / 5; [3] пустой, next → 5; [5] assign → call fail, возврат в 8;
-    // [8] пустой, return. fail: [7] пустой, trap.
+    // main: [0] two assigns -> branch to 3 / 5; [3] empty, next -> 5; [5] assign -> call fail, return to 8;
+    // [8] empty, return. fail: [7] empty, trap.
     private val s0 = assign(0, 1, imm(1uL))
     private val s1 = assign(1, 2, imm(2uL))
     private val branch = Exit.Branch(2, Expr.Cmp(CmpOp.Eq, reg(1), reg(2)), thenTarget = 3, elseTarget = 5)
@@ -34,7 +34,7 @@ class SbpfApplicationGraphTest {
     fun successors() {
         assertEquals(listOf(s1), graph.successors(s0).toList())
         assertEquals(listOf(branch), graph.successors(s1).toList())
-        // then, затем else; у пустого блока 3 первый шаг — его выход.
+        // then, then else; for the empty block 3 the first step is its exit.
         assertEquals(listOf(next3, s5), graph.successors(branch).toList())
         assertEquals(listOf(s5), graph.successors(next3).toList())
         assertEquals(listOf(call), graph.successors(s5).toList())
@@ -68,7 +68,7 @@ class SbpfApplicationGraphTest {
         assertEquals(emptyList(), graph.callers(main).toList())
     }
 
-    // Одинаковые statement'ы — разные шаги. С data class a и b были бы одним ключом графа.
+    // Identical statements are distinct steps. With a data class, a and b would be the same graph key.
     @Test
     fun stepsAreKeyedByIdentity() {
         val value = imm(1uL)

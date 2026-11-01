@@ -5,23 +5,23 @@ import org.usvm.UBvSort
 import org.usvm.UContext
 import org.usvm.UExpr
 
-// Ширина выражения IR известна только во время работы, поэтому битвекторы здесь — UExpr<UBvSort>
-// без ширины в типе; ширину проверяют require.
+// The width of an IR expression is known only at runtime, so bitvectors here are UExpr<UBvSort>
+// without the width in the type; widths are checked with require.
 class SbpfContext(components: SbpfComponents) : UContext<SbpfSizeSort>(components) {
-    // KSMT принимает «сколько бит добавить», а не итоговую ширину.
+    // KSMT takes "how many bits to add", not the resulting width.
     fun zextTo(width: Width, x: UExpr<UBvSort>): UExpr<UBvSort> =
         mkBvZeroExtensionExpr(extension(width, x), x)
 
     fun sextTo(width: Width, x: UExpr<UBvSort>): UExpr<UBvSort> =
         mkBvSignExtensionExpr(extension(width, x), x)
 
-    // KSMT принимает номер старшего бита, а не ширину.
+    // KSMT takes the index of the high bit, not the width.
     fun truncTo(width: Width, x: UExpr<UBvSort>): UExpr<UBvSort> {
         require(width.bits <= x.bits) { "trunc to ${width.bits} bits from ${x.bits}" }
         return mkBvExtractExpr(width.bits - 1, 0, x)
     }
 
-    // Готового bswap в KSMT нет: младший байт становится старшим через extract + concat.
+    // KSMT has no ready-made bswap: the low byte becomes the high one via extract + concat.
     fun bswap(x: UExpr<UBvSort>): UExpr<UBvSort> {
         require(x.bits in setOf(16, 32, 64)) { "bswap of ${x.bits} bits" }
         return (0 until x.bits / 8)

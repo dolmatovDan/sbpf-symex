@@ -7,8 +7,8 @@ import org.sbpf.symex.runner.SbpfRunner
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.nameWithoutExtension
 
-// Машина против раннера на примерах sbpf-ir: тест на каждую пару «пример × версия sBPF», список берётся
-// из папки, как runTestsInDirectory в TSA. Новый asm-пример в sbpf-ir сам становится тестом.
+// Machine vs. runner on sbpf-ir examples: one test per "example × sBPF version" pair; the list is taken
+// from the directory, like runTestsInDirectory in TSA. A new asm example in sbpf-ir becomes a test automatically.
 class DiffTest {
     private val runner = SbpfRunner.fromSystemProperty()
 

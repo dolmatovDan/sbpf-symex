@@ -11,14 +11,14 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Холодный JitPack может долго собирать usvm или зависнуть; холодная release-сборка sbpf-lift
-    # (agave, Mollusk) добавляет ещё несколько минут.
+    # A cold JitPack may take long to build usvm or hang; a cold release build of sbpf-lift
+    # (agave, Mollusk) adds several more minutes.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           path: sbpf-symex
-      # Тесты сравнивают машину с лифтером и раннером sbpf-ir: его main берётся как есть, без закрепления.
+      # Tests compare the machine with the sbpf-ir lifter and runner: its main is taken as is, unpinned.
       - uses: actions/checkout@v4
         with:
           repository: dolmatovDan/sbpf-ir
@@ -28,13 +28,13 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      # Ставит toolchain из rust-toolchain.toml sbpf-ir до того, как rust-cache посчитает ключ
-      # (rustup show с 1.28 его больше не ставит).
+      # Installs the toolchain from sbpf-ir's rust-toolchain.toml before rust-cache computes its key
+      # (rustup show no longer installs it since 1.28).
       - run: rustup toolchain install
         working-directory: sbpf-ir
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: sbpf-ir
-      # build включает тесты; sbpf-lift собирает задача buildSbpfLift из соседней папки sbpf-ir.
+      # build includes tests; sbpf-lift is built by the buildSbpfLift task from the sibling sbpf-ir directory.
       - run: ./gradlew build
         working-directory: sbpf-symex

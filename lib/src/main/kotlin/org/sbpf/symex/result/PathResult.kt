@@ -7,26 +7,26 @@ import org.sbpf.symex.machine.SbpfState
 import org.sbpf.symex.machine.registers
 import org.sbpf.symex.machine.traceValues
 
-// Значения — как status в ответе раннера: тесты читают его JSON прямо в этот enum.
+// Values match status in the runner's response: tests parse its JSON directly into this enum.
 @Serializable
 enum class PathStatus {
     @SerialName("success") Success,
     @SerialName("failure") Failure,
 }
 
-// Итог завершённого пути в терминах раннера (sbpf-ir/docs/runner.md): с ним сравнивается ответ Mollusk.
+// Outcome of a finished path in runner terms (sbpf-ir/docs/runner.md): compared against Mollusk's response.
 class PathResult(
     val status: PathStatus,
-    // Вид ошибки при Failure.
+    // Error kind on Failure.
     val error: String?,
-    // r0–r10 в конце пути.
+    // r0–r10 at the end of the path.
     val registers: List<ULong>,
-    // r0–r10 и pc перед каждой инструкцией; пусто, если трасса не записывалась.
+    // r0–r10 and pc before each instruction; empty if the trace was not recorded.
     val trace: List<List<ULong>>,
 )
 
-// Ошибка VM пока называется именем Fault: перевод в InstructionError раннера появится вместе
-// с примерами, которые падают. Ненулевой r0 — код ошибки программы, его разбор тоже позже.
+// For now a VM error is named after its Fault: mapping to the runner's InstructionError will come along
+// with failing examples. A nonzero r0 is the program's error code; decoding it also comes later.
 fun SbpfState.toPathResult(): PathResult {
     val registers = registers()
     val (status, error) = when (val result = requireNotNull(result) { "path is not finished" }) {

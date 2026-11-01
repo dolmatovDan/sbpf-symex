@@ -9,8 +9,8 @@ import org.usvm.UBoolExpr
 import org.usvm.UBvSort
 import org.usvm.UExpr
 
-// Выражения IR один к одному переводятся в термы KSMT (sbpf-ir/docs/ir.md, «Выражения»).
-// readReg отдаёт текущее значение регистра (bv64).
+// IR expressions are translated one-to-one into KSMT terms (sbpf-ir/docs/ir.md, "Expressions").
+// readReg returns the current register value (bv64).
 class ExprTranslator(private val ctx: SbpfContext, private val readReg: (Int) -> UExpr<UBvSort>) {
     fun bv(expr: Expr): UExpr<UBvSort> = with(ctx) {
         when (expr) {
@@ -51,7 +51,7 @@ class ExprTranslator(private val ctx: SbpfContext, private val readReg: (Int) ->
         }
     }
 
-    // Условия check и branch: в IR они типа Expr, bool дают только сравнения.
+    // check and branch conditions: in IR they are of type Expr; only comparisons yield bool.
     fun bool(expr: Expr): UBoolExpr = with(ctx) {
         require(expr is Expr.Cmp) { "$expr is not a comparison" }
         val (a, b) = sameWidth(expr, expr.a, expr.b)
@@ -69,7 +69,7 @@ class ExprTranslator(private val ctx: SbpfContext, private val readReg: (Int) ->
         }
     }
 
-    // KSMT ширины аргументов не сравнивает: без проверки несовпадение дошло бы до солвера.
+    // KSMT does not compare argument widths: without this check a mismatch would reach the solver.
     private fun sameWidth(expr: Expr, a: Expr, b: Expr): Pair<UExpr<UBvSort>, UExpr<UBvSort>> {
         val x = bv(a)
         val y = bv(b)

@@ -17,7 +17,7 @@ import org.usvm.targets.UTargetsSet
 
 abstract class SbpfTarget(location: Step) : UTarget<Step, SbpfTarget>(location)
 
-// Регистры r0–r10 — в кадрах memory.stack (sbpf-ir/docs/ir.md, «call и return»).
+// Registers r0–r10 live in memory.stack frames (sbpf-ir/docs/ir.md, "call and return").
 class SbpfState(
     ctx: SbpfContext,
     ownership: MutabilityOwnership,
@@ -29,9 +29,9 @@ class SbpfState(
     pathNode: PathNode<Step> = PathNode.root(),
     forkPoints: PathNode<PathNode<Step>> = PathNode.root(),
     targets: UTargetsSet<SbpfTarget, Step> = UTargetsSet.empty(),
-    // Чем закончился путь; null — путь ещё идёт.
+    // How the path ended; null means the path is still running.
     var result: SbpfResult? = null,
-    // Записывает TraceObserver, если трасса включена. Неизменяемый список: копия делит его с оригиналом.
+    // Written by TraceObserver if tracing is enabled. Immutable list: the copy shares it with the original.
     var trace: PersistentList<TraceEntry> = persistentListOf(),
 ) : UState<SbpfType, IrFunction, Step, SbpfContext, SbpfTarget, SbpfState>(
     ctx,
@@ -44,9 +44,9 @@ class SbpfState(
     forkPoints,
     targets,
 ) {
-    // Новый жетон получают обе стороны: со старым оригинал менял бы на месте узлы, общие с копией.
-    // Жетон оригинала обновляется и в самом состоянии, как в JcState (в SampleState этого нет): при откате
-    // неудачного fork StateForker возвращает условиям пути state.ownership.
+    // Both sides get a new ownership token: with the old one the original would mutate in place nodes shared with the copy.
+    // The original's token is also updated in the state itself, as in JcState (SampleState lacks this): on rollback
+    // of a failed fork StateForker restores state.ownership to the path constraints.
     override fun clone(newConstraints: UPathConstraints<SbpfType>?): SbpfState {
         val newThisOwnership = MutabilityOwnership()
         val cloneOwnership = MutabilityOwnership()
@@ -74,13 +74,13 @@ class SbpfState(
     override val isExceptional: Boolean get() = result is SbpfResult.Failed
 }
 
-// Одно поле на итог пути: «закончился» и «упал» взаимоисключающие, как JcMethodResult в JcState.
+// One field for the path outcome: "finished" and "failed" are mutually exclusive, like JcMethodResult in JcState.
 sealed interface SbpfResult {
-    // Исполнен exit точки входа. Это не «путь успешен»: итог (r0 как код возврата, проверки аккаунтов
-    // рантаймом после exit) — будущая постобработка, когда появятся память и аккаунты.
+    // The entry point's exit was executed. This does not mean "the path succeeded": the outcome (r0 as return code, account checks
+    // by the runtime after exit) is future post-processing, once memory and accounts exist.
     data object Exited : SbpfResult
 
-    // Путь завершился ошибкой VM: упал check или дошёл до trap.
+    // The path ended with a VM error: a check failed or a trap was reached.
     data class Failed(val fault: Fault) : SbpfResult
 }
 
