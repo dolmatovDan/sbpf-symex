@@ -10,6 +10,7 @@ import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.parseIr
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.Path
 import kotlin.io.path.absolute
 import kotlin.io.path.createTempDirectory
@@ -31,7 +32,8 @@ class SbpfRunner(sbpfIr: Path) {
 
     fun run(example: Path, version: Int): Outcome = withTempDir { dir ->
         // Пути в примере — относительно его файла, а копия лежит в другой папке.
-        val copy = JsonObject(readExample(example) + ("program" to JsonPrimitive(programOf(example, version).toString())))
+        val program = JsonPrimitive(programOf(example, version).toString())
+        val copy = JsonObject(readExample(example) + ("program" to program))
         val file = dir.resolve(example.fileName).apply { writeText(copy.toString()) }
         OutcomeJson.decodeFromString<Outcome>(execute("run", file.toString(), "--registers", "--trace"))
     }
@@ -62,7 +64,7 @@ class SbpfRunner(sbpfIr: Path) {
         output.readText()
     }
 
-    @OptIn(kotlin.io.path.ExperimentalPathApi::class)
+    @OptIn(ExperimentalPathApi::class)
     private fun <T> withTempDir(block: (Path) -> T): T {
         val dir = createTempDirectory("sbpf-runner")
         try {

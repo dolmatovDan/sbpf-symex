@@ -48,4 +48,11 @@ tasks.named<Test>("test") {
     useJUnitPlatform()
     dependsOn(buildSbpfLift)
     systemProperty("sbpf.ir", sbpfIr.path)
+    // Без этих входов после правки лифтера или раннера тесты считались бы UP-TO-DATE.
+    inputs.file(sbpfIr.resolve("target/release/sbpf-lift"))
+        .withPropertyName("sbpfLift").withPathSensitivity(PathSensitivity.NONE)
+    inputs.dir(sbpfIr.resolve("tests/examples"))
+        .withPropertyName("sbpfIrExamples").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(sbpfIr.resolve("tests/programs/bin"))
+        .withPropertyName("sbpfIrPrograms").withPathSensitivity(PathSensitivity.RELATIVE)
 }
