@@ -47,13 +47,17 @@ class SbpfRunner(sbpfIr: Path) {
 
     private fun readExample(example: Path) = Json.parseToJsonElement(example.readText()).jsonObject
 
-    // Вывод — в файл (-o), stderr — в файл: не нужно читать два потока параллельно, как в TSA
-    // executeCommandWithTimeout. Таймаут — чтобы зависший раннер не вешал тесты.
+    // Вывод — в файл (-o), stderr — в файл, stdout отбрасывается: не нужно читать потоки параллельно,
+    // как в TSA executeCommandWithTimeout, и полный буфер канала не повесит процесс. Таймаут — чтобы
+    // зависший раннер не вешал тесты.
     private fun execute(vararg args: String): String = withTempDir { dir ->
         val output = dir.resolve("output.json")
         val errors = dir.resolve("stderr.txt").toFile()
         val command = listOf(binary.toString(), *args, "-o", output.toString())
-        val process = ProcessBuilder(command).redirectError(errors).start()
+        val process = ProcessBuilder(command)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(errors)
+            .start()
         if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
             process.destroyForcibly()
             error("${command.joinToString(" ")}: no answer in $TIMEOUT_SECONDS s")

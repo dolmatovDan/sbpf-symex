@@ -36,6 +36,8 @@ private fun firstTraceDifference(expected: List<List<ULong>>, actual: List<List<
     val difference = when {
         expectedEntry == null -> "extra entry at pc ${actualEntry!!.last()} in machine trace"
         actualEntry == null -> "machine trace ends, runner continues at pc ${expectedEntry.last()}"
+        expectedEntry.size != actualEntry.size ->
+            "entry of ${actualEntry.size} values, runner has ${expectedEntry.size}"
         else -> expectedEntry.indices.filter { expectedEntry[it] != actualEntry[it] }.joinToString("; ") {
             val name = if (it == REGISTER_COUNT) "pc" else "r$it"
             "$name expected ${expectedEntry[it].hex()}, actual ${actualEntry[it].hex()}"

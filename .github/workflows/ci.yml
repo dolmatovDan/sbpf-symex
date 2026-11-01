@@ -28,12 +28,13 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      # Ставит toolchain из rust-toolchain.toml sbpf-ir до того, как rust-cache посчитает ключ.
-      - run: rustup show
+      # Ставит toolchain из rust-toolchain.toml sbpf-ir до того, как rust-cache посчитает ключ
+      # (rustup show с 1.28 его больше не ставит).
+      - run: rustup toolchain install
         working-directory: sbpf-ir
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: sbpf-ir
-      # build включает тесты; sbpf-lift собирает задача buildSbpfLift.
-      - run: ./gradlew build -PsbpfIr=$GITHUB_WORKSPACE/sbpf-ir
+      # build включает тесты; sbpf-lift собирает задача buildSbpfLift из соседней папки sbpf-ir.
+      - run: ./gradlew build
         working-directory: sbpf-symex

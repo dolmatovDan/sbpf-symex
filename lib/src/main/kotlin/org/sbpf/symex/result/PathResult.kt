@@ -28,13 +28,14 @@ class PathResult(
 // Ошибка VM пока называется именем Fault: перевод в InstructionError раннера появится вместе
 // с примерами, которые падают. Ненулевой r0 — код ошибки программы, его разбор тоже позже.
 fun SbpfState.toPathResult(): PathResult {
+    val registers = registers()
     val (status, error) = when (val result = requireNotNull(result) { "path is not finished" }) {
         is SbpfResult.Failed -> PathStatus.Failure to result.fault.name
         SbpfResult.Exited -> {
-            val code = registers()[0]
+            val code = registers[0]
             if (code != 0uL) throw NotImplementedError("exit with r0 = $code is not supported yet")
             PathStatus.Success to null
         }
     }
-    return PathResult(status, error, registers(), traceValues())
+    return PathResult(status, error, registers, traceValues())
 }
