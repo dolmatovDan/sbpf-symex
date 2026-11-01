@@ -97,6 +97,18 @@ class SbpfMachineTest {
         assertEquals(0uL, registers[7])
     }
 
+    // Регистры на входе — как у VM: их же раннер пишет в первую запись трассы.
+    @Test
+    fun entryRegisters() {
+        val registers = registersAfter(program())
+        val expected = List(REGISTER_COUNT) { 0uL }.toMutableList().apply {
+            this[1] = 0x400000000uL
+            this[2] = 0x400000010uL
+            this[10] = 0x200001000uL
+        }
+        assertEquals(expected, registers)
+    }
+
     @Test
     fun unsupportedStep() {
         val branch = Exit.Branch(1, Expr.Cmp(CmpOp.Eq, reg(1), imm(0uL)), thenTarget = 2, elseTarget = 2)

@@ -26,6 +26,10 @@ class SbpfInterpreter(
         val entry = module.functions.single { it.entry == module.entrypoint }
         return SbpfState(ctx, MutabilityOwnership(), entry).apply {
             memory.stack.push(REGISTER_COUNT)
+            // Регистры на входе известны, поэтому они константы, а не символы-входы.
+            entryRegisters().forEachIndexed { index, value ->
+                memory.stack.writeRegister(index, ctx.mkBv(value.toLong(), ctx.bv64Sort))
+            }
             callStack.push(entry, returnSite = null)
             newStep(graph.entryPoints(entry).single())
             models = listOf(ctx.solver<SbpfType>().emptyModel())
