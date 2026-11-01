@@ -5,8 +5,8 @@ import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
 import org.usvm.StateCollectionStrategy
-import org.usvm.UMachine
 import org.usvm.UExpr
+import org.usvm.UMachine
 import org.usvm.UMachineOptions
 import org.usvm.ps.DfsPathSelector
 import org.usvm.statistics.CompositeUMachineObserver
@@ -73,7 +73,7 @@ fun SbpfState.registers(): List<ULong> =
     List(REGISTER_COUNT) { valueOf(memory.stack.readRegister(it, ctx.bv64Sort)) }
 
 // Трасса в формате раннера: r0–r10 и pc на каждую запись.
-fun SbpfState.trace(): List<List<ULong>> =
+fun SbpfState.traceValues(): List<List<ULong>> =
     trace.map { entry -> entry.registers.map { valueOf(it) } + entry.pc.toULong() }
 
 private fun SbpfState.valueOf(expr: UExpr<KBv64Sort>): ULong {

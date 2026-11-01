@@ -30,6 +30,11 @@ class SbpfMachineTest {
         machine.analyze().map { it.result to it.registers() }
     }
 
+    private fun traceOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { machine ->
+        val state = machine.analyze().single()
+        state.traceValues() to state.registers()
+    }
+
     private fun divisorCheck(divisor: ULong) = program(
         assign(0, 1, imm(divisor)),
         check(1, Expr.Cmp(CmpOp.Ne, reg(1), imm(0uL))),
@@ -134,11 +139,6 @@ class SbpfMachineTest {
         val (result, registers) = pathsOf(divisorCheck(0uL)).single()
         assertEquals(SbpfResult.Failed(Fault.DivideByZero), result)
         assertEquals(entryRegisters()[2], registers[2])
-    }
-
-    private fun traceOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { machine ->
-        val state = machine.analyze().single()
-        state.trace() to state.registers()
     }
 
     // Одна запись на инструкцию, состояние перед ней; lddw занимает два слота, как у раннера.

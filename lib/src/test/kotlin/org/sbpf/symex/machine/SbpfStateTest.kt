@@ -16,6 +16,14 @@ class SbpfStateTest {
     @AfterTest
     fun close() = ctx.close()
 
+    private fun stateAt(step: Step): SbpfState {
+        val entry = function("main", block(0, exit = Exit.Return(0)))
+        return SbpfState(ctx, MutabilityOwnership(), entry).apply {
+            memory.stack.push(REGISTER_COUNT)
+            newStep(step)
+        }
+    }
+
     // После clone ветки независимы: запись регистра в одной не видна в другой.
     @Test
     fun cloneSeparatesRegisters() = with(ctx) {
@@ -46,14 +54,6 @@ class SbpfStateTest {
         val copy = state.clone()
         assertNotSame(before, state.ownership)
         assertNotSame(state.ownership, copy.ownership)
-    }
-
-    private fun stateAt(step: Step): SbpfState {
-        val entry = function("main", block(0, exit = Exit.Return(0)))
-        return SbpfState(ctx, MutabilityOwnership(), entry).apply {
-            memory.stack.push(REGISTER_COUNT)
-            newStep(step)
-        }
     }
 
     // next без pc — не инструкция, записи нет; ja (next с pc) — инструкция.
