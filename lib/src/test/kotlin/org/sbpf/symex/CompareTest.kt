@@ -67,4 +67,14 @@ class CompareTest {
             compareWithRunner(listOf(path(PathStatus.Failure, error = "DivideByZero")), failure)
         }
     }
+
+    // Запись машины без pc: понятное сообщение вместо исключения при разборе записи.
+    @Test
+    fun traceEntryWidth() {
+        val error = assertFailsWith<AssertionError> {
+            compareWithRunner(listOf(path(trace = listOf(registers, registers + 1uL))), outcome)
+        }
+        assertContains(error.message.orEmpty(), "entry 0")
+        assertContains(error.message.orEmpty(), "entry of 11 values, runner has 12")
+    }
 }
