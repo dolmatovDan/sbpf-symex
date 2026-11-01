@@ -3,6 +3,7 @@ package org.sbpf.symex.machine
 import org.sbpf.symex.ir.BinOp
 import org.sbpf.symex.ir.Exit
 import org.sbpf.symex.ir.Expr
+import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrBlock
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
@@ -19,6 +20,8 @@ fun imm(value: ULong, width: Width = Width.W64) = Expr.Const(value, width)
 fun bin(op: BinOp, a: Expr, b: Expr) = Expr.Bin(op, a, b)
 
 fun assign(pc: Int, dst: Int, value: Expr) = Stmt.Assign(pc, dst, value)
+
+fun check(pc: Int, cond: Expr, error: Fault = Fault.DivideByZero) = Stmt.Check(pc, cond, error)
 
 fun block(start: Int, vararg statements: Stmt, exit: Exit) =
     IrBlock(start, noreturn = false, statements = statements.toList(), exit = exit)

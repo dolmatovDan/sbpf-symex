@@ -38,8 +38,8 @@ class SbpfMachine(
             interpreter = interpreter,
             pathSelector = pathSelector,
             observer = CompositeUMachineObserver(statesCollector, stepsStatistics),
-            // Флаг, а не «текущий шаг — return»: иначе путь закончился бы до исполнения return.
-            isStateTerminated = { it.exited },
+            // Итог в состоянии, а не «текущий шаг — return»: иначе путь закончился бы до исполнения return.
+            isStateTerminated = { it.result != null },
             stopStrategy = stopStrategy,
         )
         // Остановка по лимиту шагов теряет незавершённые пути: это ошибка, а не неполный результат.

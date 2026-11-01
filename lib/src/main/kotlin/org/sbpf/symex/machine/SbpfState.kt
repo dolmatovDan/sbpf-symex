@@ -1,5 +1,6 @@
 package org.sbpf.symex.machine
 
+import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.Step
 import org.usvm.PathNode
@@ -26,9 +27,8 @@ class SbpfState(
     pathNode: PathNode<Step> = PathNode.root(),
     forkPoints: PathNode<PathNode<Step>> = PathNode.root(),
     targets: UTargetsSet<SbpfTarget, Step> = UTargetsSet.empty(),
-    // Исполнен exit точки входа. Это не «путь успешен»: итог (r0 как код возврата, проверки аккаунтов
-    // рантаймом после exit) — будущая постобработка, когда появятся память и аккаунты.
-    var exited: Boolean = false,
+    // Чем закончился путь; null — путь ещё идёт.
+    var result: SbpfResult? = null,
 ) : UState<SbpfType, IrFunction, Step, SbpfContext, SbpfTarget, SbpfState>(
     ctx,
     ownership,
@@ -62,12 +62,21 @@ class SbpfState(
             pathNode,
             forkPoints,
             targets.clone(),
-            exited,
+            result,
         )
     }
 
-    // Ошибок пока нет: check, trap и память появятся в следующих блоках.
-    override val isExceptional: Boolean get() = false
+    override val isExceptional: Boolean get() = result is SbpfResult.Failed
+}
+
+// Одно поле на итог пути: «закончился» и «упал» взаимоисключающие, как JcMethodResult в JcState.
+sealed interface SbpfResult {
+    // Исполнен exit точки входа. Это не «путь успешен»: итог (r0 как код возврата, проверки аккаунтов
+    // рантаймом после exit) — будущая постобработка, когда появятся память и аккаунты.
+    data object Exited : SbpfResult
+
+    // Путь завершился ошибкой VM: упал check или дошёл до trap.
+    data class Failed(val fault: Fault) : SbpfResult
 }
 
 val SbpfState.lastStep: Step get() = pathNode.statement

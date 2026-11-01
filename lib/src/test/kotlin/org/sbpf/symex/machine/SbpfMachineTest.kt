@@ -5,6 +5,7 @@ import org.sbpf.symex.ir.CmpOp
 import org.sbpf.symex.ir.Exit
 import org.sbpf.symex.ir.Expr
 import org.sbpf.symex.ir.ExtOp
+import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Stmt
 import org.sbpf.symex.ir.UnOp
@@ -13,7 +14,6 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 // Программы из одного блока, ожидания посчитаны руками (как в sbpf-ir, тест asm в crates/sbpf-run/tests/run.rs).
 class SbpfMachineTest {
@@ -21,9 +21,20 @@ class SbpfMachineTest {
         val states = machine.analyze()
         assertEquals(1, states.size, "one path without branches")
         val state = states.single()
-        assertTrue(state.exited)
+        assertEquals(SbpfResult.Exited, state.result)
         state.registers()
     }
+
+    // Итог и регистры каждого пути.
+    private fun pathsOf(module: IrModule) = SbpfMachine(module).use { machine ->
+        machine.analyze().map { it.result to it.registers() }
+    }
+
+    private fun divisorCheck(divisor: ULong) = program(
+        assign(0, 1, imm(divisor)),
+        check(1, Expr.Cmp(CmpOp.Ne, reg(1), imm(0uL))),
+        assign(1, 2, imm(1uL)),
+    )
 
     private fun program(vararg statements: Stmt) =
         module(function("entrypoint", block(0, *statements, exit = Exit.Return(statements.size))))
@@ -99,7 +110,7 @@ class SbpfMachineTest {
 
     // Регистры на входе — как у VM: их же раннер пишет в первую запись трассы.
     @Test
-    fun entryRegisters() {
+    fun registersOnEntry() {
         val registers = registersAfter(program())
         val expected = List(REGISTER_COUNT) { 0uL }.toMutableList().apply {
             this[1] = 0x400000000uL
@@ -107,6 +118,22 @@ class SbpfMachineTest {
             this[10] = 0x200001000uL
         }
         assertEquals(expected, registers)
+    }
+
+    // Условие check истинно: развилки нет, путь идёт дальше.
+    @Test
+    fun checkPasses() {
+        val (result, registers) = pathsOf(divisorCheck(5uL)).single()
+        assertEquals(SbpfResult.Exited, result)
+        assertEquals(1uL, registers[2])
+    }
+
+    // Условие ложно: путь завершается ошибкой check, следующая инструкция не исполняется.
+    @Test
+    fun checkFails() {
+        val (result, registers) = pathsOf(divisorCheck(0uL)).single()
+        assertEquals(SbpfResult.Failed(Fault.DivideByZero), result)
+        assertEquals(entryRegisters()[2], registers[2])
     }
 
     @Test

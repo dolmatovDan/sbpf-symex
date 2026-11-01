@@ -1,6 +1,7 @@
 package org.sbpf.symex.machine
 
 import org.sbpf.symex.ir.Exit
+import org.sbpf.symex.ir.Expr
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
 import org.sbpf.symex.ir.Stmt
@@ -16,7 +17,7 @@ typealias SbpfStepScope = StepScope<SbpfState, SbpfType, Step, SbpfContext>
 // r0–r10.
 const val REGISTER_COUNT = 11
 
-// Пока исполняются только assign и return: программы из одного блока без памяти и вызовов.
+// Пока исполняются только assign, check и return: программы из одного блока без памяти и вызовов.
 class SbpfInterpreter(
     private val ctx: SbpfContext,
     private val graph: SbpfApplicationGraph,
@@ -41,8 +42,9 @@ class SbpfInterpreter(
         when (val step = state.lastStep) {
             is Stmt.Assign -> visitAssign(scope, step)
             // Вызовов пока нет, поэтому return всегда из точки входа. Путь жив: он закончился, а не невозможен.
-            is Exit.Return -> scope.doWithState { exited = true }
-            is Stmt.Load, is Stmt.Store, is Stmt.Check,
+            is Exit.Return -> scope.doWithState { result = SbpfResult.Exited }
+            is Stmt.Check -> visitCheck(scope, step)
+            is Stmt.Load, is Stmt.Store,
             is Exit.Next, is Exit.Branch, is Exit.Call, is Exit.Callx, is Exit.Syscall, is Exit.Trap,
             -> throw NotImplementedError("pc ${step.pc ?: "-"}: ${step::class.simpleName} is not supported yet")
         }
@@ -50,10 +52,7 @@ class SbpfInterpreter(
     }
 
     private fun visitAssign(scope: SbpfStepScope, stmt: Stmt.Assign) {
-        val value = scope.calcOnState {
-            val bv64: UBvSort = ctx.bv64Sort
-            ExprTranslator(ctx) { memory.stack.readRegister(it, bv64) }.bv(stmt.value)
-        }
+        val value = scope.calcOnState { translator().bv(stmt.value) }
         // writeRegister сорт не проверяет: без проверки ошибка всплыла бы при чтении, на чужом pc.
         require(value.sort == ctx.bv64Sort) { "pc ${stmt.pc}: assign of ${value.bits} bits to r${stmt.dst}" }
         val next = graph.successors(stmt).single()
@@ -61,5 +60,24 @@ class SbpfInterpreter(
             memory.stack.writeRegister(stmt.dst, value)
             newStep(next)
         }
+    }
+
+    // fork, а не assert: путь, где условие ложно, — тоже результат, он завершается ошибкой.
+    // При известных входах условие — константа, и развилки нет.
+    private fun visitCheck(scope: SbpfStepScope, stmt: Stmt.Check) {
+        val cond = requireNotNull(stmt.cond as? Expr.Cmp) { "pc ${stmt.pc}: check condition is not a comparison" }
+        val condition = scope.calcOnState { translator().bool(cond) }
+        val next = graph.successors(stmt).single()
+        scope.fork(
+            condition,
+            blockOnTrueState = { newStep(next) },
+            blockOnFalseState = { result = SbpfResult.Failed(stmt.error) },
+        )
+    }
+
+    // Регистры выражения читаются из текущего кадра состояния.
+    private fun SbpfState.translator(): ExprTranslator {
+        val bv64: UBvSort = ctx.bv64Sort
+        return ExprTranslator(ctx) { memory.stack.readRegister(it, bv64) }
     }
 }
