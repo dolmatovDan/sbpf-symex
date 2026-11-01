@@ -33,6 +33,19 @@ java {
     }
 }
 
+// Тесты сравнивают машину с лифтером и раннером sbpf-ir, запуская sbpf-lift вживую. Версия sbpf-ir не
+// закреплена: берётся соседняя папка (или -PsbpfIr=<путь>) как есть.
+val sbpfIr: File = providers.gradleProperty("sbpfIr").map { file(it) }
+    .getOrElse(rootDir.resolve("../sbpf-ir")).canonicalFile
+
+// cargo сам пропускает сборку, если ничего не менялось.
+val buildSbpfLift by tasks.registering(Exec::class) {
+    workingDir = sbpfIr
+    commandLine("cargo", "build", "--release", "-p", "sbpf-lift-cli")
+}
+
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    dependsOn(buildSbpfLift)
+    systemProperty("sbpf.ir", sbpfIr.path)
 }
