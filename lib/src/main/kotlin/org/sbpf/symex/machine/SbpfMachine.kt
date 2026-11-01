@@ -56,7 +56,7 @@ class SbpfMachine(
     }
 
     // Итоги путей в терминах раннера.
-    fun run(): List<PathResult> = analyze().map { it.toPathResult() }
+    fun results(): List<PathResult> = analyze().map { it.toPathResult() }
 
     override fun close() {
         solver.close()

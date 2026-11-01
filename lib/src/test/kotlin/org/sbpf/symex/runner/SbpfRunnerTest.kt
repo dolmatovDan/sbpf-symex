@@ -1,6 +1,5 @@
 package org.sbpf.symex.runner
 
-import org.sbpf.symex.machine.entryRegisters
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -14,15 +13,6 @@ class SbpfRunnerTest {
     fun programOfVersion() {
         for (version in listOf(0, 3)) {
             assertEquals(version, runner.lift(runner.programOf(alu64, version)).sbpfVersion)
-        }
-    }
-
-    // Первая запись трассы раннера — регистры на входе: константы Entry.kt совпадают с VM.
-    @Test
-    fun entryRegistersMatchVm() {
-        for (version in listOf(0, 3)) {
-            val trace = requireNotNull(runner.run(alu64, version).trace)
-            assertEquals(entryRegisters() + 0uL, trace.first(), "v$version")
         }
     }
 }

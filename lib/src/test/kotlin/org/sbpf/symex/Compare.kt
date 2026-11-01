@@ -18,7 +18,7 @@ fun compareWithRunner(paths: List<PathResult>, outcome: Outcome) {
     val path = paths.single()
     assertEquals(outcome.status, path.status.toRunner(), "status")
     assertEquals(outcome.error, path.error, "error")
-    val traceDifference = traceDifference(requireNotNull(outcome.trace) { "runner returned no trace" }, path.trace)
+    val traceDifference = firstTraceDifference(requireNotNull(outcome.trace) { "runner returned no trace" }, path.trace)
     if (path.status == PathStatus.Success) {
         val registers = requireNotNull(outcome.registers) { "runner returned no registers" }
         // Место ошибки показывает трасса, поэтому её расхождение — в том же сообщении.
@@ -34,7 +34,7 @@ private fun PathStatus.toRunner() = when (this) {
 }
 
 // Первая расходящаяся запись трассы — с неё начинается ошибка; null, если трассы совпадают.
-private fun traceDifference(expected: List<List<ULong>>, actual: List<List<ULong>>): String? {
+private fun firstTraceDifference(expected: List<List<ULong>>, actual: List<List<ULong>>): String? {
     val index = expected.indices.firstOrNull { it >= actual.size || expected[it] != actual[it] }
         ?: if (actual.size > expected.size) expected.size else return null
     val expectedEntry = expected.getOrNull(index)

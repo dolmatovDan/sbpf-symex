@@ -1,5 +1,6 @@
 package org.sbpf.symex
 
+import org.sbpf.symex.machine.REGISTER_COUNT
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.PathStatus
 import org.sbpf.symex.runner.Outcome
@@ -10,15 +11,15 @@ import kotlin.test.assertFailsWith
 
 // Сама функция сравнения: на настоящих примерах машина и раннер совпадают, и ветки расхождений не исполняются.
 class CompareTest {
-    private val registers = List(11) { it.toULong() }
+    private val registers = List(REGISTER_COUNT) { it.toULong() }
     private val trace = listOf(registers + 0uL, registers + 1uL)
+    private val outcome = Outcome(Status.Success, registers = registers + 1uL, trace = trace)
 
     private fun path(
         status: PathStatus = PathStatus.Success,
+        error: String? = null,
         trace: List<List<ULong>> = this.trace,
-    ) = PathResult(status, null, registers, trace)
-
-    private val outcome = Outcome(Status.Success, registers = registers + 1uL, trace = trace)
+    ) = PathResult(status, error, registers, trace)
 
     @Test
     fun same() = compareWithRunner(listOf(path()), outcome)
@@ -48,5 +49,23 @@ class CompareTest {
             compareWithRunner(listOf(path(trace = trace.take(1))), outcome)
         }
         assertContains(error.message.orEmpty(), "entry 1 (pc 1)")
+    }
+
+    // Лишняя запись машины — например, вторая запись на инструкцию после check.
+    @Test
+    fun traceLonger() {
+        val error = assertFailsWith<AssertionError> {
+            compareWithRunner(listOf(path(trace = trace + listOf(registers + 2uL))), outcome)
+        }
+        assertContains(error.message.orEmpty(), "entry 2 (pc 2)")
+        assertContains(error.message.orEmpty(), "extra entry at pc 2")
+    }
+
+    @Test
+    fun differentError() {
+        val failure = Outcome(Status.Failure, error = "ProgramFailedToComplete", trace = trace)
+        assertFailsWith<AssertionError> {
+            compareWithRunner(listOf(path(PathStatus.Failure, error = "DivideByZero")), failure)
+        }
     }
 }

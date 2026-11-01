@@ -102,7 +102,7 @@ class SbpfMachineTest {
     // Итог пути в терминах раннера: упавший check — failure с видом ошибки.
     @Test
     fun failedCheckResult() {
-        val path = SbpfMachine(divisorCheck(0uL)).use { it.run() }.single()
+        val path = SbpfMachine(divisorCheck(0uL)).use { it.results() }.single()
         assertEquals(PathStatus.Failure, path.status)
         assertEquals("DivideByZero", path.error)
     }
@@ -111,7 +111,7 @@ class SbpfMachineTest {
     @Test
     fun exitCodeNotSupported() {
         val ir = program(assign(0, 0, imm(7uL)))
-        assertFailsWith<NotImplementedError> { SbpfMachine(ir).use { it.run() } }
+        assertFailsWith<NotImplementedError> { SbpfMachine(ir).use { it.results() } }
     }
 
     @Test
