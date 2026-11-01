@@ -1,5 +1,7 @@
 package org.sbpf.symex.machine
 
+import kotlinx.collections.immutable.PersistentList
+import kotlinx.collections.immutable.persistentListOf
 import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.Step
@@ -29,6 +31,8 @@ class SbpfState(
     targets: UTargetsSet<SbpfTarget, Step> = UTargetsSet.empty(),
     // Чем закончился путь; null — путь ещё идёт.
     var result: SbpfResult? = null,
+    // Записывает TraceObserver, если трасса включена. Неизменяемый список: копия делит его с оригиналом.
+    var trace: PersistentList<TraceEntry> = persistentListOf(),
 ) : UState<SbpfType, IrFunction, Step, SbpfContext, SbpfTarget, SbpfState>(
     ctx,
     ownership,
@@ -63,6 +67,7 @@ class SbpfState(
             forkPoints,
             targets.clone(),
             result,
+            trace,
         )
     }
 

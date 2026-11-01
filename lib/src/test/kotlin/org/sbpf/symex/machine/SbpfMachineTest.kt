@@ -112,7 +112,7 @@ class SbpfMachineTest {
     @Test
     fun registersOnEntry() {
         val registers = registersAfter(program())
-        val expected = List(REGISTER_COUNT) { 0uL }.toMutableList().apply {
+        val expected = MutableList(REGISTER_COUNT) { 0uL }.apply {
             this[1] = 0x400000000uL
             this[2] = 0x400000010uL
             this[10] = 0x200001000uL
@@ -134,6 +134,39 @@ class SbpfMachineTest {
         val (result, registers) = pathsOf(divisorCheck(0uL)).single()
         assertEquals(SbpfResult.Failed(Fault.DivideByZero), result)
         assertEquals(entryRegisters()[2], registers[2])
+    }
+
+    private fun traceOf(module: IrModule) = SbpfMachine(module, recordTrace = true).use { machine ->
+        val state = machine.analyze().single()
+        state.trace() to state.registers()
+    }
+
+    // Одна запись на инструкцию, состояние перед ней; lddw занимает два слота, как у раннера.
+    @Test
+    fun trace() {
+        val ir = module(
+            function(
+                "entrypoint",
+                block(
+                    0,
+                    assign(0, 1, imm(0x100000000uL)),
+                    assign(2, 1, bin(BinOp.Add, reg(1), imm(1uL))),
+                    exit = Exit.Return(3),
+                ),
+            ),
+        )
+        val (trace, registers) = traceOf(ir)
+        assertEquals(listOf(0uL, 2uL, 3uL), trace.map { it.last() })
+        assertEquals(entryRegisters() + 0uL, trace.first())
+        assertEquals(0x100000000uL, trace[1][1])
+        assertEquals(registers + 3uL, trace.last())
+    }
+
+    // check и его инструкция дают одну запись; у упавшего check она тоже есть.
+    @Test
+    fun traceOfCheck() {
+        assertEquals(listOf(0uL, 1uL, 3uL), traceOf(divisorCheck(5uL)).first.map { it.last() })
+        assertEquals(listOf(0uL, 1uL), traceOf(divisorCheck(0uL)).first.map { it.last() })
     }
 
     @Test
