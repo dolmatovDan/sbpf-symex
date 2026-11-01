@@ -51,7 +51,9 @@ class ExprTranslator(private val ctx: SbpfContext, private val readReg: (Int) ->
         }
     }
 
-    fun bool(expr: Expr.Cmp): UBoolExpr = with(ctx) {
+    // Условия check и branch: в IR они типа Expr, bool дают только сравнения.
+    fun bool(expr: Expr): UBoolExpr = with(ctx) {
+        require(expr is Expr.Cmp) { "$expr is not a comparison" }
         val (a, b) = sameWidth(expr, expr.a, expr.b)
         when (expr.op) {
             CmpOp.Eq -> mkEq(a, b)

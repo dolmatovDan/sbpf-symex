@@ -1,7 +1,6 @@
 package org.sbpf.symex.machine
 
 import org.sbpf.symex.ir.Exit
-import org.sbpf.symex.ir.Expr
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
 import org.sbpf.symex.ir.Stmt
@@ -65,8 +64,7 @@ class SbpfInterpreter(
     // fork, а не assert: путь, где условие ложно, — тоже результат, он завершается ошибкой.
     // При известных входах условие — константа, и развилки нет.
     private fun visitCheck(scope: SbpfStepScope, stmt: Stmt.Check) {
-        val cond = requireNotNull(stmt.cond as? Expr.Cmp) { "pc ${stmt.pc}: check condition is not a comparison" }
-        val condition = scope.calcOnState { translator().bool(cond) }
+        val condition = scope.calcOnState { translator().bool(stmt.cond) }
         val next = graph.successors(stmt).single()
         scope.fork(
             condition,

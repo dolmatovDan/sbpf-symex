@@ -129,5 +129,6 @@ class ExprTranslatorTest {
         val mixedCmp = Expr.Cmp(CmpOp.Eq, imm(1uL), imm(1uL, Width.W32))
         assertFailsWith<IllegalArgumentException> { translator.bool(mixedCmp) }
         assertFailsWith<IllegalArgumentException> { translator.bv(Expr.Cmp(CmpOp.Eq, imm(1uL), imm(1uL))) }
+        assertFailsWith<IllegalArgumentException> { translator.bool(imm(1uL)) }
     }
 }
