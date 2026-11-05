@@ -43,7 +43,7 @@ The oracle is the real runner (`sbpf-lift run`, Mollusk = agave 4.3), never a ha
 
 ## Environment pitfalls
 
-- usvm comes from JitPack pinned to commit `dab6d43…` (newer commits fail on JitPack). Local `includeBuild("../usvm")` is deferred: usvm's `buildSrc` only builds with Gradle 8.11.
+- usvm comes from JitPack pinned to commit `6b2a078…`. Before bumping, check that JitPack built the commit and that KSMT/collections versions in usvm's `Dependencies.kt` are unchanged. Local `includeBuild("../usvm")` is deferred: usvm does not configure with Gradle 9 (`usvm-jvm/build.gradle.kts`).
 - All `io.ksmt:*` must match usvm's version exactly (0.5.26, also `kotlinx-collections-immutable` 0.3.8); Gradle silently upgrades on conflict and usvm then fails at runtime with `NoSuchMethodError`.
 - Native Yices exists only for linux-x64, mac-arm, windows-x64.
 

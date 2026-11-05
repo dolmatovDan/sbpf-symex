@@ -2,8 +2,8 @@
 
 [versions]
 kotlin = "2.4.10"
-# usvm commit on JitPack. Why not a newer one: see README, "Environment".
-usvm = "dab6d43261eba1c4e72b35d8eda91763b6494934"
+# usvm commit on JitPack. Before bumping: see README, "Окружение".
+usvm = "6b2a0781a728d14ca9271b33830c8db734157e54"
 # KSMT and collections-immutable are exactly the versions usvm is built with
 # (usvm/buildSrc/src/main/kotlin/Dependencies.kt); otherwise Gradle silently bumps them for usvm too.
 ksmt = "0.5.26"
