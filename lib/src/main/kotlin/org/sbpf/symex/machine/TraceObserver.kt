@@ -1,6 +1,8 @@
 package org.sbpf.symex.machine
 
 import io.ksmt.sort.KBv64Sort
+import org.sbpf.symex.ir.Exit
+import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.Stmt
 import org.usvm.UExpr
 import org.usvm.statistics.UMachineObserver
@@ -15,6 +17,9 @@ class TraceObserver : UMachineObserver<SbpfState> {
         val step = state.lastStep
         // next without pc is not an instruction.
         val pc = step.pc ?: return
+        // The VM throws ExecutionOverrun before recording the trace (solana-sbpf 0.23.0, interpreter.rs:192-201):
+        // there is no instruction at this pc. UnsupportedInstruction is thrown after recording, so it gets an entry.
+        if (step is Exit.Trap && step.error == Fault.ExecutionOverrun) return
         // The entry is made on the instruction's first step. A check precedes its instruction with the same pc,
         // so the check makes the entry, and when a check fails the instruction the path failed on is in the trace.
         // The pathNode root (depth 0) has no step.

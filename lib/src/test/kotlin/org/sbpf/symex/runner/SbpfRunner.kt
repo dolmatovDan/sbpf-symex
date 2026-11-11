@@ -38,11 +38,25 @@ class SbpfRunner(sbpfIr: Path) {
         OutcomeJson.decodeFromString<Outcome>(execute("run", file.toString(), "--registers", "--trace"))
     }
 
-    // All examples point to .v0.so; the program for a given version is the sibling .v<version>.so.
+    // sBPF versions the example runs on: an example on .v0.so is built for v0 and v3, one on .v3.so only for v3
+    // (jmp32 exists only in v3).
+    fun versionsOf(example: Path): List<Int> = programBaseAndVersions(example).second
+
+    // The program for a given version is the sibling .v<version>.so of the one in the example.
     fun programOf(example: Path, version: Int): Path {
+        val (base, versions) = programBaseAndVersions(example)
+        require(version in versions) { "$example: no program for v$version" }
+        return example.absolute().parent.resolve("$base.v$version.so").normalize()
+    }
+
+    // The program path without the version suffix, and the versions it is built for.
+    private fun programBaseAndVersions(example: Path): Pair<String, List<Int>> {
         val program = readExample(example).getValue("program").jsonPrimitive.content
-        require(program.endsWith(".v0.so")) { "$example: program $program is not .v0.so" }
-        return example.absolute().parent.resolve(program.removeSuffix(".v0.so") + ".v$version.so").normalize()
+        return when {
+            program.endsWith(".v0.so") -> program.removeSuffix(".v0.so") to listOf(0, 3)
+            program.endsWith(".v3.so") -> program.removeSuffix(".v3.so") to listOf(3)
+            else -> throw IllegalArgumentException("$example: program $program is neither .v0.so nor .v3.so")
+        }
     }
 
     private fun readExample(example: Path) = Json.parseToJsonElement(example.readText()).jsonObject
