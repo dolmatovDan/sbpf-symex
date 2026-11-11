@@ -29,6 +29,8 @@ class SbpfMachineTest {
     private fun program(vararg statements: Stmt) =
         module(function("entrypoint", block(0, *statements, exit = Exit.Return(statements.size))))
 
+    private fun PathResult.pcs() = trace.map { it.last() }
+
     // Entry registers match the VM's: the runner writes the same values into the first trace entry.
     @Test
     fun registersOnEntry() {
@@ -74,7 +76,7 @@ class SbpfMachineTest {
             ),
         )
         val path = pathOf(ir)
-        assertEquals(listOf(0uL, 2uL, 3uL), path.trace.map { it.last() })
+        assertEquals(listOf(0uL, 2uL, 3uL), path.pcs())
         assertEquals(entryRegisters() + 0uL, path.trace.first())
         assertEquals(0x100000000uL, path.trace[1][1])
         assertEquals(path.registers + 3uL, path.trace.last())
@@ -83,8 +85,8 @@ class SbpfMachineTest {
     // A check and its instruction produce one entry; a failed check has one too.
     @Test
     fun traceOfCheck() {
-        assertEquals(listOf(0uL, 1uL, 3uL), pathOf(divisorCheck(5uL)).trace.map { it.last() })
-        assertEquals(listOf(0uL, 1uL), pathOf(divisorCheck(0uL)).trace.map { it.last() })
+        assertEquals(listOf(0uL, 1uL, 3uL), pathOf(divisorCheck(5uL)).pcs())
+        assertEquals(listOf(0uL, 1uL), pathOf(divisorCheck(0uL)).pcs())
     }
 
     // A nonzero r0 at exit is the program's error code; decoding it is not implemented yet.
@@ -93,8 +95,6 @@ class SbpfMachineTest {
         val ir = program(assign(0, 0, imm(7uL)))
         assertFailsWith<NotImplementedError> { pathOf(ir) }
     }
-
-    private fun PathResult.pcs() = trace.map { it.last() }
 
     // Falling through to the next block is not an instruction: no trace entry, no pc.
     @Test
@@ -158,13 +158,15 @@ class SbpfMachineTest {
         assertEquals(listOf(0uL, 1uL, 4uL, 5uL), path.pcs())
     }
 
-    // Both sides lead to the same block: still one path.
+    // Both sides lead to the same block: no fork, so the condition is not even evaluated. It compares bv64 with bv32
+    // here and would fail to translate: with a constant condition this is the only way to see that there was no fork.
     @Test
     fun branchToSameBlock() {
+        val cond = Expr.Cmp(CmpOp.Eq, reg(1), imm(0uL, Width.W32))
         val ir = module(
             function(
                 "entrypoint",
-                block(0, exit = Exit.Branch(0, Expr.Cmp(CmpOp.Eq, reg(1), reg(1)), thenTarget = 1, elseTarget = 1)),
+                block(0, exit = Exit.Branch(0, cond, thenTarget = 1, elseTarget = 1)),
                 block(1, exit = Exit.Return(1)),
             ),
         )

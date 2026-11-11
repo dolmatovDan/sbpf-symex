@@ -79,8 +79,14 @@ class SbpfInterpreter(
     // Each side moves to its own block inside its fork block: code after fork does not know which side the original took.
     // With known inputs the condition is a constant, and only one side is taken.
     private fun visitBranch(scope: SbpfStepScope, exit: Exit.Branch) {
-        val condition = scope.calcOnState { translator().bool(exit.cond) }
         val thenStep = graph.blockEntry(exit.thenTarget)
+        // Both sides lead to the same block: no fork, otherwise a symbolic condition would split one path into two
+        // identical ones.
+        if (exit.thenTarget == exit.elseTarget) {
+            scope.doWithState { newStep(thenStep) }
+            return
+        }
+        val condition = scope.calcOnState { translator().bool(exit.cond) }
         val elseStep = graph.blockEntry(exit.elseTarget)
         scope.fork(
             condition,

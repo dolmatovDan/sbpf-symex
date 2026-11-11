@@ -1,5 +1,7 @@
 package org.sbpf.symex.runner
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.writeText
@@ -27,7 +29,7 @@ class SbpfRunnerTest {
         val program = runner.programOf(alu64, 3)
         val example = createTempFile(suffix = ".json")
         try {
-            example.writeText("""{"program": "$program"}""")
+            example.writeText(JsonObject(mapOf("program" to JsonPrimitive(program.toString()))).toString())
             assertEquals(listOf(3), runner.versionsOf(example))
             assertEquals(program, runner.programOf(example, 3))
             assertFailsWith<IllegalArgumentException> { runner.programOf(example, 0) }
