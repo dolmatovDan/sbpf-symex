@@ -60,7 +60,7 @@ X.s / X.rs ──► X.so ──┬── sbpf-lift lift ──► IR JSON ─�
 Фикстур нет: `SbpfRunner` (`lib/src/test/kotlin/org/sbpf/symex/runner/`) вызывает `sbpf-lift` прямо из тестов, как TSA вызывает fift.
 
 - `lift(so)` разбирает IR строгим Json (`ignoreUnknownKeys = false`): так тесты замечают новые поля лифтера.
-- `run(example, version)` исполняет пример раннера с `--registers --trace`. Все примеры указывают на `.v0.so`, поэтому для v3 пишется копия примера с путём `.v3.so`.
+- `run(example, version)` исполняет пример раннера с `--registers --trace`. Пример с `.v0.so` собран под обе версии, для v3 пишется копия примера с путём `.v3.so`. Пример с `.v3.so` — программа только под v3 (например, jmp32, которого нет в v0); версии примера даёт `versionsOf`.
 - У задачи `test` входами объявлены бинарь `sbpf-lift`, `tests/examples` и `tests/programs/bin`: после правки лифтера или примеров тесты перезапускаются, а не считаются UP-TO-DATE.
 
 Входы известны (регистры как у VM, данных нет), поэтому у каждой программы ровно один путь.
@@ -91,7 +91,7 @@ class PathResult(
 
 Модель ответа раннера (`Outcome`: `status`, `error`, `registers`, `trace`) читается по [`sbpf-ir/docs/runner.md`](../sbpf-ir/docs/runner.md). Числа там — `u64`, в Kotlin это `ULong`, не `Long`.
 
-`DiffTest` параметризованный: один случай на каждую пару «пример из `sbpf-ir/tests/examples/asm/` × версия sBPF», без ручного списка. Новый asm-пример в `sbpf-ir` сам становится тестом.
+`DiffTest` параметризованный: один случай на каждую пару «пример из `sbpf-ir/tests/examples/asm/` × версия sBPF из `versionsOf`», без ручного списка. Новый asm-пример в `sbpf-ir` сам становится тестом.
 
 ## Структура
 

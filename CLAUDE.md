@@ -37,9 +37,9 @@ Pipeline: IR JSON → Kotlin model (`ir/`) → usvm `ApplicationGraph` → `UMac
 
 ### Testing model
 
-The oracle is the real runner (`sbpf-lift run`, Mollusk = agave 4.3), never a hand-written IR interpreter. `test/.../runner/SbpfRunner` invokes `sbpf-lift lift` (parsed with strict Json, `ignoreUnknownKeys = false`, to notice new lifter fields) and `run --registers --trace` live — no fixtures. For v3 it writes a copy of the example pointing at `.v3.so`.
+The oracle is the real runner (`sbpf-lift run`, Mollusk = agave 4.3), never a hand-written IR interpreter. `test/.../runner/SbpfRunner` invokes `sbpf-lift lift` (parsed with strict Json, `ignoreUnknownKeys = false`, to notice new lifter fields) and `run --registers --trace` live — no fixtures. An example on `.v0.so` runs on v0 and v3 (for v3 a copy of the example pointing at `.v3.so` is written); one on `.v3.so` runs only on v3 (`versionsOf`).
 
-`DiffTest` generates one dynamic test per `sbpf-ir/tests/examples/asm/*.json` × {v0, v3}; adding an example in sbpf-ir adds a test. `compareWithRunner` (`Compare.kt`) checks: exactly one path → status/error → registers (success only) → trace, reporting the first diverging entry. `machine/IrBuilders.kt` builds IR by hand for unit tests.
+`DiffTest` generates one dynamic test per `sbpf-ir/tests/examples/asm/*.json` × its versions ({v0, v3}, or {v3} for `.v3.so`); adding an example in sbpf-ir adds a test. `compareWithRunner` (`Compare.kt`) checks: exactly one path → status/error → registers (success only) → trace, reporting the first diverging entry. `machine/IrBuilders.kt` builds IR by hand for unit tests.
 
 ## Environment pitfalls
 
