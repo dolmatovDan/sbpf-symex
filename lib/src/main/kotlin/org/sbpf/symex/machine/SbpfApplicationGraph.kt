@@ -22,7 +22,7 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
             for (block in function.blocks) {
                 val steps = steps(block)
                 for ((step, next) in steps.zipWithNext()) successors[step] = listOf(next)
-                successors[block.exit] = exitTargets(block.exit).map { firstStep(block(it)) }
+                successors[block.exit] = exitTargets(block.exit).map { blockEntry(it) }
                 for (step in steps) stepFunction[step] = function
                 (block.exit as? Exit.Call)?.let { callees[it] = function(it.target) }
             }
@@ -44,7 +44,7 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
     override fun callers(method: IrFunction) = callers[method].orEmpty().asSequence()
 
     // A function's first block starts at entry.
-    override fun entryPoints(method: IrFunction) = sequenceOf(firstStep(block(method.entry)))
+    override fun entryPoints(method: IrFunction) = sequenceOf(blockEntry(method.entry))
 
     override fun exitPoints(method: IrFunction) =
         method.blocks.asSequence().map { it.exit }.filter { it is Exit.Return || it is Exit.Trap }
@@ -53,10 +53,10 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
 
     override fun statementsOf(method: IrFunction) = method.blocks.asSequence().flatMap { steps(it) }
 
-    private fun steps(block: IrBlock): List<Step> = block.statements + block.exit
+    // The first step of the block starting at start: where an exit leads. For an empty block it is the exit itself.
+    fun blockEntry(start: Int): Step = block(start).let { it.statements.firstOrNull() ?: it.exit }
 
-    // For an empty block, the first step is the exit itself.
-    private fun firstStep(block: IrBlock): Step = block.statements.firstOrNull() ?: block.exit
+    private fun steps(block: IrBlock): List<Step> = block.statements + block.exit
 
     // Calls continue at the return site: callees tells where the called function goes.
     private fun exitTargets(exit: Exit): List<Int> = when (exit) {

@@ -28,11 +28,11 @@ Pipeline: IR JSON → Kotlin model (`ir/`) → usvm `ApplicationGraph` → `UMac
 
 - `ir/` — `sealed` hierarchies for statements, block exits and expressions, discriminated by the `kind` field; hex numbers `"0x…"` as `ULong`. Validates `format_version`, `sbpf_version` (0 or 3), register ranges, constant widths. Plain `class`, not `data class`: distinct program points must be distinct keys.
 - `machine/` — usvm plug-in following `usvm-sample-language` and TSA:
-  - `SbpfApplicationGraph`: a step is one statement or a block exit.
+  - `SbpfApplicationGraph`: a step is one statement or a block exit; `blockEntry(start)` is the first step of a block, where exits lead.
   - `SbpfState`: registers r0–r10 in `URegistersStack` frames (`memory.stack`), path `result` (`Exited`/`Failed`), trace. `clone` follows `JcState.clone`.
   - `Entry.kt`: initial registers as agave 4.3 VM sets them (r1 input region, r2 instruction data, r10 stack top, others 0).
-  - `SbpfInterpreter`: `when` over statement kind; `check` forks a failing path. `ExprTranslator` maps IR ops 1:1 to KSMT bitvector terms via `SbpfContext` helpers (`zext`/`sext`/`trunc`/`bswap`).
-  - `SbpfMachine`: DFS, step limit, `throwExceptionOnStepFailure = true`; `results()` must be read before `close()` (it owns the solver and context). `TraceObserver` records r0–r10 + pc before each instruction in the runner's format.
+  - `SbpfInterpreter`: `when` over step kind; `branch` forks into then/else, `check` forks a failing path, `trap` ends the path with its error (memory, calls and syscalls are not executed yet). `ExprTranslator` maps IR ops 1:1 to KSMT bitvector terms via `SbpfContext` helpers (`zext`/`sext`/`trunc`/`bswap`).
+  - `SbpfMachine`: DFS, step limit, `throwExceptionOnStepFailure = true`; `results()` must be read before `close()` (it owns the solver and context). `TraceObserver` records r0–r10 + pc before each instruction in the runner's format (none for `next` without pc and for `trap ExecutionOverrun`, which the VM raises before tracing).
 - `result/PathResult` — the only boundary tests see: status, error, final registers, trace.
 
 ### Testing model

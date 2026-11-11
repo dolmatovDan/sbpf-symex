@@ -16,7 +16,7 @@ typealias SbpfStepScope = StepScope<SbpfState, SbpfType, Step, SbpfContext>
 // r0–r10.
 const val REGISTER_COUNT = 11
 
-// Only assign, check and return are executed for now: single-block programs without memory or calls.
+// Registers and control flow within the program are executed; memory (load, store), calls and syscalls are not yet.
 class SbpfInterpreter(
     private val ctx: SbpfContext,
     private val graph: SbpfApplicationGraph,
@@ -40,11 +40,14 @@ class SbpfInterpreter(
         val scope = SbpfStepScope(state, forkBlackList)
         when (val step = state.lastStep) {
             is Stmt.Assign -> visitAssign(scope, step)
+            is Stmt.Check -> visitCheck(scope, step)
+            is Exit.Next -> scope.doWithState { newStep(graph.blockEntry(step.target)) }
+            is Exit.Branch -> visitBranch(scope, step)
             // There are no calls yet, so return is always from the entry point. The path is alive: it finished, it is not infeasible.
             is Exit.Return -> scope.doWithState { result = SbpfResult.Exited }
-            is Stmt.Check -> visitCheck(scope, step)
-            is Stmt.Load, is Stmt.Store,
-            is Exit.Next, is Exit.Branch, is Exit.Call, is Exit.Callx, is Exit.Syscall, is Exit.Trap,
+            // Like return, the path is alive: it ended with an error, and the error is a result.
+            is Exit.Trap -> scope.doWithState { result = SbpfResult.Failed(step.error) }
+            is Stmt.Load, is Stmt.Store, is Exit.Call, is Exit.Callx, is Exit.Syscall,
             -> throw NotImplementedError("pc ${step.pc ?: "-"}: ${step::class.simpleName} is not supported yet")
         }
         return scope.stepResult()
@@ -70,6 +73,19 @@ class SbpfInterpreter(
             condition,
             blockOnTrueState = { newStep(next) },
             blockOnFalseState = { result = SbpfResult.Failed(stmt.error) },
+        )
+    }
+
+    // Each side moves to its own block inside its fork block: code after fork does not know which side the original took.
+    // With known inputs the condition is a constant, and only one side is taken.
+    private fun visitBranch(scope: SbpfStepScope, exit: Exit.Branch) {
+        val condition = scope.calcOnState { translator().bool(exit.cond) }
+        val thenStep = graph.blockEntry(exit.thenTarget)
+        val elseStep = graph.blockEntry(exit.elseTarget)
+        scope.fork(
+            condition,
+            blockOnTrueState = { newStep(thenStep) },
+            blockOnFalseState = { newStep(elseStep) },
         )
     }
 

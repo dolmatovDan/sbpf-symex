@@ -80,6 +80,15 @@ class SbpfApplicationGraphTest {
         assertEquals(listOf(exit), g.successors(b).toList())
     }
 
+    // Where an exit leads: the block's first statement, or the exit itself for an empty block.
+    @Test
+    fun blockEntry() {
+        assertEquals(s0, graph.blockEntry(0))
+        assertEquals(next3, graph.blockEntry(3))
+        assertEquals(trap, graph.blockEntry(7))
+        assertFailsWith<IllegalArgumentException> { graph.blockEntry(4) }
+    }
+
     @Test
     fun missingTarget() {
         assertFailsWith<IllegalArgumentException> {
