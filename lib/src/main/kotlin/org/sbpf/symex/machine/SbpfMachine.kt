@@ -4,6 +4,7 @@ import io.ksmt.expr.KBitVec64Value
 import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
+import org.sbpf.symex.ir.Step
 import org.sbpf.symex.machine.memory.InputSpec
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.toPathResult
@@ -12,6 +13,7 @@ import org.usvm.UExpr
 import org.usvm.UMachine
 import org.usvm.UMachineOptions
 import org.usvm.ps.DfsPathSelector
+import org.usvm.ps.LoopLimiterPs
 import org.usvm.statistics.CompositeUMachineObserver
 import org.usvm.statistics.StepsStatistics
 import org.usvm.statistics.collectors.AllStatesCollector
@@ -34,7 +36,13 @@ class SbpfMachine(
 
     // Raw finished states, like TvmMachine.analyze.
     fun analyze(): List<SbpfState> {
-        val pathSelector = DfsPathSelector<SbpfState>()
+        // Paths whose loops ran more symbolic iterations than the limit are dropped silently, as usvm does: a loop
+        // bounded by the input would otherwise never end. Iterations with a concrete exit condition are not counted.
+        val pathSelector = LoopLimiterPs<Step, IrFunction, Loop, SbpfState>(
+            DfsPathSelector(),
+            SbpfLoopTracker(module, graph),
+            options.loopIterationLimit,
+        )
         pathSelector.add(listOf(interpreter.getInitialState(module, input)))
 
         val statesCollector = AllStatesCollector<SbpfState>()
@@ -68,10 +76,13 @@ class SbpfMachine(
 
     companion object {
         // An exception in a step is a machine error, not a lost path.
+        // loopIterationLimit = L keeps the paths with 0..L symbolic iterations of a loop: usvm drops a state once
+        // its count exceeds L (LoopLimiterPs), so L is passed as is, unlike TSA, which passes L - 1.
         val defaultOptions = UMachineOptions(
             stateCollectionStrategy = StateCollectionStrategy.ALL,
             stepLimit = 100_000uL,
             throwExceptionOnStepFailure = true,
+            loopIterationLimit = 10,
         )
     }
 }
