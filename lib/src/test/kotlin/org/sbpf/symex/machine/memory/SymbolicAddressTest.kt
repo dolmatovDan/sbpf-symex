@@ -135,25 +135,36 @@ class SymbolicAddressTest {
         }
     }
 
-    // A 64-bit symbolic value stored at a symbolic stack address and loaded back from the same address: every
-    // byte lands at addr + k and comes back from there, so the loaded word equals the stored one on every model.
+    // A 64-bit symbolic value stored at a symbolic stack address a and loaded back from the same address: every
+    // byte lands at a + k and comes back from there, so the loaded word equals the stored one on every model, and
+    // when a == X the constant load of X + 3 sees byte 3 (a byte order broken the same way in store and load would
+    // pass the round trip alone).
     @Test
     fun wideStoreAndLoadBySymbolicAddress() {
+        val x = MM_STACK_START + 0x100uL
         val ir = program(
             load(0, 3, Width.W64, reg(2)),
             load(1, 4, Width.W8, bin(BinOp.Add, reg(2), imm(8uL))),
             assign(2, 4, bin(BinOp.And, reg(4), imm(7uL))),
-            assign(3, 5, bin(BinOp.Add, reg(4), imm(MM_STACK_START + 0x100uL))),
+            assign(3, 5, bin(BinOp.Add, reg(4), imm(x))),
             store(4, Width.W64, reg(5), reg(3)),
             load(5, 6, Width.W64, reg(5)),
+            load(6, 7, Width.W8, imm(x + 3uL)),
         )
         SbpfMachine(ir, input = symbolicIx(9)).use { machine ->
             val state = machine.analyze().single()
             val ctx = state.ctx
+            val solver = ctx.solver<SbpfType>()
             val differ = state.clone()
             differ.pathConstraints += ctx.mkNot(ctx.mkEq(differ.register(3), differ.register(6)))
-            assertTrue(ctx.solver<SbpfType>().check(differ.pathConstraints) is UUnsatResult, "r6 == r3 on every model")
+            assertTrue(solver.check(differ.pathConstraints) is UUnsatResult, "r6 == r3 on every model")
             assertEquals(state.value(3), state.value(6))
+            val hit = state.clone()
+            hit.pathConstraints += ctx.mkEq(hit.register(5), ctx.mkBv(x.toLong(), 64u))
+            val model = solver.check(hit.pathConstraints)
+            check(model is USatResult)
+            val byte3 = ctx.zextTo(Width.W64, ctx.mkBvExtractExpr(31, 24, state.register(3)))
+            assertEquals(model.model.eval(byte3), model.model.eval(state.register(7)), "a == X: [X + 3] is byte 3")
         }
     }
 

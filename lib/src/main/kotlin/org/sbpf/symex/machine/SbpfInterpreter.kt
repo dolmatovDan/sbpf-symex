@@ -81,7 +81,10 @@ class SbpfInterpreter(
         val addr = scope.calcOnState { address(stmt.addr, stmt.pc) }
         val next = graph.successors(stmt).single()
         memoryAccess(
-            scope, addr, stmt.width, store = false,
+            scope,
+            addr,
+            stmt.width,
+            store = false,
             onConst = { constAddr ->
                 val value = loadConst(constAddr, stmt.width) ?: return@memoryAccess false
                 memory.stack.writeRegister(stmt.dst, value)
@@ -100,7 +103,10 @@ class SbpfInterpreter(
         require(value.bits == stmt.width.bits) { "pc ${stmt.pc}: store of ${value.bits} bits as ${stmt.width}" }
         val next = graph.successors(stmt).single()
         memoryAccess(
-            scope, addr, stmt.width, store = true,
+            scope,
+            addr,
+            stmt.width,
+            store = true,
             onConst = { constAddr -> storeConst(constAddr, value).also { if (it) newStep(next) } },
             onSymbolic = {
                 storeSymbolic(addr, value)
