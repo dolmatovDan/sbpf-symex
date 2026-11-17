@@ -31,6 +31,7 @@ fun SbpfState.toPathResult(): PathResult {
     val registers = registers()
     val (status, error) = when (val result = requireNotNull(result) { "path is not finished" }) {
         is SbpfResult.Failed -> PathStatus.Failure to result.fault.name
+        SbpfResult.AccessViolation -> PathStatus.Failure to "AccessViolation"
         SbpfResult.Exited -> {
             val code = registers[0]
             if (code != 0uL) throw NotImplementedError("exit with r0 = $code is not supported yet")

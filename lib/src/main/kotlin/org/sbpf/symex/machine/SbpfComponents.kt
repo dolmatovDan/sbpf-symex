@@ -9,12 +9,12 @@ import org.usvm.UMachineOptions
 import org.usvm.USizeExprProvider
 import org.usvm.solver.USolverBase
 import org.usvm.solver.UTypeSolver
+import org.usvm.types.USingleTypeStream
 import org.usvm.types.UTypeStream
 import org.usvm.types.UTypeSystem
-import org.usvm.types.emptyTypeStream
 import kotlin.time.Duration
 
-// usvm size sort (array lengths, object addresses). Unused for now: the memory model will choose it.
+// usvm size sort: the index of the byte memory array, i.e. the key of machine/memory/MemoryLayout.kt.
 typealias SbpfSizeSort = UBv32Sort
 
 // sBPF has no objects or types: the type system is a stub, like SampleTypeSystem.
@@ -31,7 +31,11 @@ class SbpfTypeSystem(override val typeOperationsTimeout: Duration) : UTypeSystem
 
     override fun findSubtypes(type: SbpfType): Sequence<SbpfType> = emptySequence()
 
-    override fun topTypeStream(): UTypeStream<SbpfType> = emptyTypeStream()
+    // The single type, as TvmTypeSystem does: the type solver checks every static reference (the input array of the
+    // memory model) against this stream, and an empty one makes every state unsatisfiable.
+    private val topTypeStream = USingleTypeStream(this, SbpfType)
+
+    override fun topTypeStream(): UTypeStream<SbpfType> = topTypeStream
 }
 
 // The solver is Yices only: options.solverType is not read, and Z3 is not among the dependencies.

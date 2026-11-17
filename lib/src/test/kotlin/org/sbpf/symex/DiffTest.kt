@@ -21,7 +21,8 @@ class DiffTest {
             runner.versionsOf(example).map { version ->
                 DynamicTest.dynamicTest("${example.nameWithoutExtension} v$version") {
                     val module = runner.lift(runner.programOf(example, version))
-                    val paths = SbpfMachine(module, recordTrace = true).use { it.results() }
+                    val input = runner.inputOf(example)
+                    val paths = SbpfMachine(module, recordTrace = true, input = input).use { it.results() }
                     compareWithRunner(paths, runner.run(example, version))
                 }
             }

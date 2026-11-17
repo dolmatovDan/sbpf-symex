@@ -22,7 +22,7 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
             for (block in function.blocks) {
                 val steps = steps(block)
                 for ((step, next) in steps.zipWithNext()) successors[step] = listOf(next)
-                successors[block.exit] = exitTargets(block.exit).map { blockEntry(it) }
+                successors[block.exit] = block.exit.targets().map { blockEntry(it) }
                 for (step in steps) stepFunction[step] = function
                 (block.exit as? Exit.Call)?.let { callees[it] = function(it.target) }
             }
@@ -58,17 +58,18 @@ class SbpfApplicationGraph(module: IrModule) : ApplicationGraph<IrFunction, Step
 
     private fun steps(block: IrBlock): List<Step> = block.statements + block.exit
 
-    // Calls continue at the return site: callees tells where the called function goes.
-    private fun exitTargets(exit: Exit): List<Int> = when (exit) {
-        is Exit.Next -> listOf(exit.target)
-        is Exit.Branch -> listOf(exit.thenTarget, exit.elseTarget)
-        is Exit.Call -> listOfNotNull(exit.next)
-        is Exit.Callx -> listOfNotNull(exit.next)
-        is Exit.Syscall -> listOfNotNull(exit.next)
-        is Exit.Return, is Exit.Trap -> emptyList()
-    }
-
     private fun block(start: Int) = requireNotNull(blocks[start]) { "no block at pc $start" }
 
     private fun function(entry: Int) = requireNotNull(functions[entry]) { "no function at pc $entry" }
+}
+
+// Starts of the blocks an exit leads to within the same control flow. Calls continue at the return site: where the
+// called function goes is callees' business. Shared by the application graph and the loop search.
+fun Exit.targets(): List<Int> = when (this) {
+    is Exit.Next -> listOf(target)
+    is Exit.Branch -> listOf(thenTarget, elseTarget)
+    is Exit.Call -> listOfNotNull(next)
+    is Exit.Callx -> listOfNotNull(next)
+    is Exit.Syscall -> listOfNotNull(next)
+    is Exit.Return, is Exit.Trap -> emptyList()
 }
