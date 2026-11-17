@@ -57,8 +57,8 @@ class SbpfRunnerTest {
             val header = """{"program": "x.v0.so", "program_id": "Asm1111111111111111111111111111111111111111","""
             withAccounts.writeText("""$header "instruction_data": "", "accounts": []}""")
             assertEquals(0, runner.inputOf(withAccounts).ix.length)
-            val account =
-                """{"key": "Asm1111111111111111111111111111111111111111", "owner": "11111111111111111111111111111111", "lamports": 1}"""
+            val account = """{"key": "Asm1111111111111111111111111111111111111111",
+                                 "owner": "11111111111111111111111111111111", "lamports": 1}"""
             withAccounts.writeText("""$header "instruction_data": "", "accounts": [$account]}""")
             assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
         } finally {

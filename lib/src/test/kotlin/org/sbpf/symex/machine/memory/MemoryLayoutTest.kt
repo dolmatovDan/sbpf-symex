@@ -32,7 +32,7 @@ class MemoryLayoutTest {
         }
     }
 
-    // In v0 the region starts at the first section, as the lifter gives it: below it the slot is not mapped.
+    // The region start is taken from the IR as is: below it the slot is not mapped.
     @Test
     fun rodataNotAtSlotStart() {
         val l = MemoryLayout(0, RoRegion(MM_RODATA_V0_START + 0x120uL, ByteArray(216)), 64uL)

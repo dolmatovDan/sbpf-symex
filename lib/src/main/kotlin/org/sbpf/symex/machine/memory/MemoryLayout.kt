@@ -61,8 +61,8 @@ class MemoryLayout(
 
     init {
         // v0: code and rodata in slot 1; v3: only rodata, in slot 0 (memory-notes.md, 1.4). The region starts where
-        // the loader maps it, not necessarily at the slot start: in v0 the lifter gives the first section's address
-        // (0x1_0000_0120 for the asm programs), and anything below it in the slot is an AccessViolation.
+        // the loader maps it (the lifter runs it with agave's optimize_rodata = false, so in v0 that is the slot
+        // start with zeros up to the first section); only the slot is checked here, the start is taken as given.
         val expectedSlot = if (sbpfVersion == 0) MM_RODATA_V0_START else MM_RODATA_V3_START
         require(roRegion.vaddr shr 32 == expectedSlot shr 32) {
             "ro_region at 0x${roRegion.vaddr.toString(16)} in sBPF v$sbpfVersion, expected slot ${expectedSlot shr 32}"

@@ -162,6 +162,7 @@ class SymbolicAddressTest {
             val byte3 = ctx.zextTo(Width.W64, ctx.mkBvExtractExpr(31, 24, state.register(3)))
             val hit = state.clone()
             hit.pathConstraints += ctx.mkEq(hit.register(5), ctx.mkBv(x.toLong(), 64u))
+            assertTrue(solver.check(hit.pathConstraints) is USatResult, "a == X is feasible")
             hit.pathConstraints += ctx.mkNot(ctx.mkEq(hit.register(7), byte3))
             assertTrue(solver.check(hit.pathConstraints) is UUnsatResult, "a == X: [X + 3] is byte 3 on every model")
         }

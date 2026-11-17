@@ -40,7 +40,8 @@ val SbpfState.memoryModel: SbpfMemoryModel
     get() = requireNotNull(memoryModelOrNull) { "memory is not initialized" }
 
 // Sets up the memory of the initial state: allocates the arrays, copies input0 into the input region as one ranged
-// update, writes the layout bytes and, for concrete instruction data, constrains its bytes to the given ones.
+// update, fills ro with rodata once, writes the layout bytes and, for concrete instruction data, constrains its
+// bytes to the given ones.
 // The static reference of input0 is what makes usvm read it as an input array (mapWithStaticAsSymbolic).
 fun SbpfState.initializeMemory(module: IrModule, input: InputSpec, heapSize: ULong) = with(ctx) {
     val layout = MemoryLayout(module.sbpfVersion, module.roRegion, input.size.toULong(), heapSize)
