@@ -21,7 +21,6 @@ import org.usvm.UBvSort
 import org.usvm.UExpr
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 // Loads and stores by constant addresses on hand-built IR; against the runner they are checked by DiffTest (memory.s).
 class SbpfMemoryTest {
@@ -239,13 +238,5 @@ class SbpfMemoryTest {
             ),
         )
         assertViolation(crossing, 1uL)
-    }
-
-    @Test
-    fun symbolicAddressNotSupportedYet() {
-        val ir = program(load(0, 1, Width.W8, reg(2)), load(1, 3, Width.W8, bin(BinOp.Add, reg(1), reg(1))))
-        assertFailsWith<NotImplementedError> {
-            SbpfMachine(ir, input = InputSpec(programId, IxMode.Symbolic(1))).use { it.results() }
-        }
     }
 }

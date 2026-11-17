@@ -1,6 +1,12 @@
 package org.sbpf.symex.machine.memory
 
+import io.ksmt.utils.asExpr
 import org.sbpf.symex.ir.RoRegion
+import org.sbpf.symex.machine.SbpfContext
+import org.sbpf.symex.machine.SbpfSizeSort
+import org.usvm.UBoolExpr
+import org.usvm.UBvSort
+import org.usvm.UExpr
 
 // VM address space (solana-sbpf, ebpf.rs): the high 32 bits of an address select a slot, the low 32 bits are the
 // offset inside it. The runner is agave 4.3 with all features enabled (sbpf-ir/docs/runner.md): no gaps between stack
@@ -80,3 +86,23 @@ fun key(addr: ULong): Int {
     require(slot <= MAX_SLOT && offset <= MAX_OFFSET) { "address 0x${addr.toString(16)} has no key" }
     return (slot.toInt() shl OFFSET_BITS) or offset.toInt()
 }
+
+// The same mapping for a symbolic address: bits 32..35 (the slot) over bits 0..27 (the offset). It agrees with key
+// exactly on the addresses accessCondition allows: there the dropped bits 28..31 and 36..63 are zero.
+fun SbpfContext.symbolicKey(addr: UExpr<UBvSort>): UExpr<SbpfSizeSort> =
+    mkBvConcatExpr(mkBvExtractExpr(35, 32, addr), mkBvExtractExpr(27, 0, addr)).asExpr(bv32Sort)
+
+// findRegion as a formula: the access [addr, addr + n) lies in some region (a writable one for a store). Bounds are
+// compared as addr <= end - n, like MemoryRegion.contains, so addr + n cannot wrap around.
+fun MemoryLayout.accessCondition(ctx: SbpfContext, addr: UExpr<UBvSort>, n: Int, store: Boolean): UBoolExpr =
+    with(ctx) {
+        val cases = regions
+            .filter { n.toULong() <= it.size && (it.writable || !store) }
+            .map { region ->
+                mkAnd(
+                    mkBvUnsignedGreaterOrEqualExpr(addr, mkBv(region.start.toLong(), 64u)),
+                    mkBvUnsignedLessOrEqualExpr(addr, mkBv((region.end - n.toULong()).toLong(), 64u)),
+                )
+            }
+        if (cases.isEmpty()) falseExpr else mkOr(cases)
+    }

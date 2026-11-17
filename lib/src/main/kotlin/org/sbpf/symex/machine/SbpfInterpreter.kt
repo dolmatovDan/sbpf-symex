@@ -8,10 +8,15 @@ import org.sbpf.symex.ir.Step
 import org.sbpf.symex.ir.Stmt
 import org.sbpf.symex.machine.memory.DEFAULT_HEAP_SIZE
 import org.sbpf.symex.machine.memory.InputSpec
+import org.sbpf.symex.machine.memory.accessCondition
 import org.sbpf.symex.machine.memory.initializeMemory
 import org.sbpf.symex.machine.memory.loadConst
+import org.sbpf.symex.machine.memory.loadSymbolic
+import org.sbpf.symex.machine.memory.memoryModel
 import org.sbpf.symex.machine.memory.storeConst
+import org.sbpf.symex.machine.memory.storeSymbolic
 import org.usvm.StepResult
+import org.usvm.UExpr
 import org.usvm.StepScope
 import org.usvm.UBvSort
 import org.usvm.UInterpreter
@@ -24,8 +29,7 @@ typealias SbpfStepScope = StepScope<SbpfState, SbpfType, Step, SbpfContext>
 // r0–r10.
 const val REGISTER_COUNT = 11
 
-// Registers, control flow and memory accesses by constant addresses are executed; symbolic addresses, calls and
-// syscalls are not yet.
+// Registers, control flow and memory are executed; calls and syscalls are not yet.
 class SbpfInterpreter(
     private val ctx: SbpfContext,
     private val graph: SbpfApplicationGraph,
@@ -72,37 +76,65 @@ class SbpfInterpreter(
         return scope.stepResult()
     }
 
-    // The failing access ends the path with AccessViolation, like a trap: the path is alive, the error is its result.
+    // A failing access ends the path with AccessViolation, like a trap: the path is alive, the error is its result.
+    // A constant address is checked in Kotlin and takes one side; a symbolic one forks on the bounds condition,
+    // and the access itself happens inside the fork block, on the side where it is valid.
     private fun visitLoad(scope: SbpfStepScope, stmt: Stmt.Load) {
-        val addr = scope.calcOnState { constAddress(stmt.addr, stmt.pc) }
+        val addr = scope.calcOnState { address(stmt.addr, stmt.pc) }
         val next = graph.successors(stmt).single()
-        scope.doWithState {
-            val value = loadConst(addr, stmt.width)
-            if (value == null) {
-                result = SbpfResult.AccessViolation
-            } else {
-                memory.stack.writeRegister(stmt.dst, value)
-                newStep(next)
+        val constAddr = addr.constValue()
+        if (constAddr != null) {
+            scope.doWithState {
+                val value = loadConst(constAddr, stmt.width)
+                if (value == null) {
+                    result = SbpfResult.AccessViolation
+                } else {
+                    memory.stack.writeRegister(stmt.dst, value)
+                    newStep(next)
+                }
             }
+            return
         }
+        val inBounds = scope.calcOnState { memoryModel.layout.accessCondition(ctx, addr, stmt.width.bits / 8, store = false) }
+        scope.fork(
+            inBounds,
+            blockOnTrueState = {
+                memory.stack.writeRegister(stmt.dst, loadSymbolic(addr, stmt.width))
+                newStep(next)
+            },
+            blockOnFalseState = { result = SbpfResult.AccessViolation },
+        )
     }
 
     private fun visitStore(scope: SbpfStepScope, stmt: Stmt.Store) {
-        val (addr, value) = scope.calcOnState { constAddress(stmt.addr, stmt.pc) to translator().bv(stmt.value) }
+        val (addr, value) = scope.calcOnState { address(stmt.addr, stmt.pc) to translator().bv(stmt.value) }
         require(value.bits == stmt.width.bits) { "pc ${stmt.pc}: store of ${value.bits} bits as ${stmt.width}" }
         val next = graph.successors(stmt).single()
-        scope.doWithState {
-            if (storeConst(addr, value)) newStep(next) else result = SbpfResult.AccessViolation
+        val constAddr = addr.constValue()
+        if (constAddr != null) {
+            scope.doWithState {
+                if (storeConst(constAddr, value)) newStep(next) else result = SbpfResult.AccessViolation
+            }
+            return
         }
+        val inBounds = scope.calcOnState { memoryModel.layout.accessCondition(ctx, addr, stmt.width.bits / 8, store = true) }
+        scope.fork(
+            inBounds,
+            blockOnTrueState = {
+                storeSymbolic(addr, value)
+                newStep(next)
+            },
+            blockOnFalseState = { result = SbpfResult.AccessViolation },
+        )
     }
 
-    // Symbolic addresses come with the next step of the memory model.
-    private fun SbpfState.constAddress(expr: Expr, pc: Int): ULong {
+    private fun SbpfState.address(expr: Expr, pc: Int): UExpr<UBvSort> {
         val addr = translator().bv(expr)
         require(addr.bits == 64) { "pc $pc: address of ${addr.bits} bits" }
-        return (addr as? KBitVec64Value)?.longValue?.toULong()
-            ?: throw NotImplementedError("pc $pc: memory access by a symbolic address is not supported yet")
+        return addr
     }
+
+    private fun UExpr<UBvSort>.constValue(): ULong? = (this as? KBitVec64Value)?.longValue?.toULong()
 
     private fun visitAssign(scope: SbpfStepScope, stmt: Stmt.Assign) {
         val value = scope.calcOnState { translator().bv(stmt.value) }
