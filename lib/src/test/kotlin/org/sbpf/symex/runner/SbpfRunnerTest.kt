@@ -61,6 +61,9 @@ class SbpfRunnerTest {
                                  "owner": "11111111111111111111111111111111", "lamports": 1}"""
             withAccounts.writeText("""$header "instruction_data": "", "accounts": [$account]}""")
             assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
+            // An odd number of hex digits would otherwise silently become an extra byte.
+            withAccounts.writeText("""$header "instruction_data": "abc"}""")
+            assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
         } finally {
             withAccounts.deleteExisting()
         }

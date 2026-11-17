@@ -44,6 +44,15 @@ class MemoryRegion(val name: String, val start: ULong, val size: ULong, val writ
     // an addr near 2^64 would wrap around and pass.
     fun contains(addr: ULong, n: Int): Boolean =
         n.toULong() <= size && addr >= start && addr <= end - n.toULong()
+
+    // The same as a formula over a symbolic address; n must fit the region (callers filter on n <= size).
+    fun contains(ctx: SbpfContext, addr: UExpr<UBvSort>, n: Int): UBoolExpr = with(ctx) {
+        require(n.toULong() <= size) { "$name: access of $n bytes does not fit" }
+        mkAnd(
+            mkBvUnsignedGreaterOrEqualExpr(addr, mkBv(start.toLong(), 64u)),
+            mkBvUnsignedLessOrEqualExpr(addr, mkBv((end - n.toULong()).toLong(), 64u)),
+        )
+    }
 }
 
 // Regions of one program run: rodata as the loader maps it (ro_region of the IR), the stack, the heap and the input.
@@ -101,11 +110,6 @@ fun MemoryLayout.accessCondition(ctx: SbpfContext, addr: UExpr<UBvSort>, n: Int,
     with(ctx) {
         val cases = regions
             .filter { n.toULong() <= it.size && (it.writable || !store) }
-            .map { region ->
-                mkAnd(
-                    mkBvUnsignedGreaterOrEqualExpr(addr, mkBv(region.start.toLong(), 64u)),
-                    mkBvUnsignedLessOrEqualExpr(addr, mkBv((region.end - n.toULong()).toLong(), 64u)),
-                )
-            }
+            .map { it.contains(ctx, addr, n) }
         if (cases.isEmpty()) falseExpr else mkOr(cases)
     }

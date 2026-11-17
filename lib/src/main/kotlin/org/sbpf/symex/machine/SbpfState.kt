@@ -37,8 +37,6 @@ class SbpfState(
     // Set once by initializeMemory on the initial state; the layout and the array references are the same on every
     // path, the contents live in memory.
     var memoryModelOrNull: SbpfMemoryModel? = null,
-    // Whether rodata has been copied into the byte memory on this path (SbpfMemory.kt, ensureRodataInMemory).
-    var rodataInMemory: Boolean = false,
 ) : UState<SbpfType, IrFunction, Step, SbpfContext, SbpfTarget, SbpfState>(
     ctx,
     ownership,
@@ -75,7 +73,6 @@ class SbpfState(
             result,
             trace,
             memoryModelOrNull,
-            rodataInMemory,
         )
     }
 

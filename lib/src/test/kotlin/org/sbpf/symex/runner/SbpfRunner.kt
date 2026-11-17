@@ -54,8 +54,11 @@ class SbpfRunner(sbpfIr: Path) {
             "$example: accounts are not supported by the machine yet"
         }
         val programId = decodeBase58(json.getValue("program_id").jsonPrimitive.content)
-        val ix = json.getValue("instruction_data").jsonPrimitive.content
-            .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val hex = json.getValue("instruction_data").jsonPrimitive.content
+        require(hex.length % 2 == 0 && hex.all { it in "0123456789abcdefABCDEF" }) {
+            "$example: instruction_data is not hex: $hex"
+        }
+        val ix = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         return InputSpec(programId, IxMode.Concrete(ix))
     }
 

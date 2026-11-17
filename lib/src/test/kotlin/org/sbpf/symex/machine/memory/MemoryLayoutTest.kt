@@ -1,6 +1,9 @@
 package org.sbpf.symex.machine.memory
 
 import org.sbpf.symex.ir.RoRegion
+import org.sbpf.symex.machine.SbpfComponents
+import org.sbpf.symex.machine.SbpfContext
+import org.usvm.UMachineOptions
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -84,6 +87,26 @@ class MemoryLayoutTest {
         assertEquals(key(MM_STACK_START) + 0x40000, key(MM_STACK_START + 0x40000uL))
         assertFailsWith<IllegalArgumentException> { key(MM_INPUT_START + 0x10000000uL) }
         assertFailsWith<IllegalArgumentException> { key(0x500000000uL) }
+    }
+
+    // The formula for symbolic addresses agrees with findRegion on every region boundary, width and access kind:
+    // on constants KSMT folds it to true or false.
+    @Test
+    fun accessConditionAgreesWithFindRegion() {
+        val l = layout(rodata = 16)
+        SbpfContext(SbpfComponents(UMachineOptions())).use { ctx ->
+            for (region in l.regions) for (n in listOf(1, 2, 4, 8)) for (store in listOf(false, true)) {
+                val last = region.end - n.toULong()
+                val probes = listOf(region.start - 1uL, region.start, last, last + 1uL)
+                for (addr in probes) {
+                    val condition = l.accessCondition(ctx, ctx.mkBv(addr.toLong(), 64u), n, store)
+                    check(condition == ctx.trueExpr || condition == ctx.falseExpr) { "not folded: $condition" }
+                    val expected = l.findRegion(addr, n, store) != null
+                    val probe = "${region.name}, 0x${addr.toString(16)}, $n bytes, store=$store"
+                    assertEquals(expected, condition == ctx.trueExpr, probe)
+                }
+            }
+        }
     }
 
     // The region size is limited by the key: a region past 2^28 bytes could not be addressed.
