@@ -85,7 +85,7 @@ class SbpfState(
 // One field for the path outcome: "finished" and "failed" are mutually exclusive, like JcMethodResult in JcState.
 sealed interface SbpfResult {
     // The entry point's exit was executed. This does not mean "the path succeeded": the outcome (r0 as return code, account checks
-    // by the runtime after exit) is future post-processing, once memory and accounts exist.
+    // by the runtime after exit) is future post-processing, once accounts are modeled.
     data object Exited : SbpfResult
 
     // The path ended with a VM error: a check failed or a trap was reached.

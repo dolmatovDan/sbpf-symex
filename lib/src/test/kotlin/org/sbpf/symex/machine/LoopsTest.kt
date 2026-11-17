@@ -11,9 +11,9 @@ import kotlin.test.assertTrue
 
 // Loops on hand-built block graphs. Block starts double as names; conditions do not matter here.
 class LoopsTest {
-    private fun cond(reg: Int) = Expr.Cmp(CmpOp.Ne, reg(reg), imm(0uL))
+    private val cond = Expr.Cmp(CmpOp.Ne, reg(1), imm(0uL))
 
-    private fun branch(pc: Int, thenTarget: Int, elseTarget: Int) = Exit.Branch(pc, cond(1), thenTarget, elseTarget)
+    private fun branch(pc: Int, thenTarget: Int, elseTarget: Int) = Exit.Branch(pc, cond, thenTarget, elseTarget)
 
     private fun ja(pc: Int, target: Int) = Exit.Next(target, pc)
 

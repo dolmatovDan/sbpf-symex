@@ -48,7 +48,8 @@ class SbpfRunnerTest {
         val memory = runner.inputOf(runner.examples.resolve("asm/memory.json"))
         val ix = memory.ix
         assertIs<IxMode.Concrete>(ix)
-        assertContentEquals(byteArrayOf(0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(), 0x99.toByte()), ix.bytes)
+        val expected = byteArrayOf(0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(), 0x99.toByte())
+        assertContentEquals(expected, ix.bytes)
         assertEquals(0x02, memory.programId[0].toInt())
         assertEquals(0, runner.inputOf(alu64).ix.length)
         val withAccounts = createTempFile(suffix = ".json")

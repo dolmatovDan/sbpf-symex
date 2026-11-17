@@ -37,29 +37,30 @@ fun findLoops(function: IrFunction): List<Loop> {
             }
         }
     }
-    return bodies.map { (header, body) -> Loop(header, body, forkPoints(header, body, blocks.mapValues { it.value.exit })) }
+    val exits = blocks.mapValues { it.value.exit }
+    return bodies.map { (header, body) -> Loop(header, body, forkPoints(header, body, exits)) }
 }
 
+// A node standing for the end of an iteration: not a block start (those are pcs, non-negative).
+private const val ITERATION_EXIT = -1
+
 // Branches that can end the iteration (JcLoopTracker's LoopExecutionPathAnalyzer): in the graph of one iteration,
-// where the back edges and the exits from the body all lead to a single ITERATION_EXIT node, a branch block is a
+// where the back edges and the exits from the body all lead to the single ITERATION_EXIT node, a branch block is a
 // fork point unless some other block post-dominates it, i.e. both outcomes rejoin before the iteration ends.
 private fun forkPoints(header: Int, body: Set<Int>, exits: Map<Int, Exit>): Set<Step> {
-    val iterationExit = -1
-    val nodes = body + iterationExit
+    val nodes = body + ITERATION_EXIT
     val successors = nodes.associateWith { node ->
-        if (node == iterationExit) {
+        if (node == ITERATION_EXIT) {
             emptyList()
         } else {
-            exits.getValue(node).targets().map { if (it in body && it != header) it else iterationExit }.distinct()
+            exits.getValue(node).targets().map { if (it in body && it != header) it else ITERATION_EXIT }.distinct()
         }
     }
-    val predecessors = nodes.associateWith { mutableListOf<Int>() }
-    for (node in nodes) for (next in successors.getValue(node)) predecessors.getValue(next) += node
     // Post-dominators are dominators of the reversed graph, rooted at the iteration exit.
-    val postDominators = dominators(nodes, iterationExit, successors)
+    val postDominators = dominators(nodes, ITERATION_EXIT, successors)
     return body
         .filter { exits.getValue(it) is Exit.Branch }
-        .filter { block -> postDominators.getValue(block).all { it == block || it == iterationExit } }
+        .filter { block -> postDominators.getValue(block).all { it == block || it == ITERATION_EXIT } }
         .map { exits.getValue(it) }
         .toSet()
 }

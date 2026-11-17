@@ -28,6 +28,7 @@ import org.usvm.UBvSort
 import org.usvm.UExpr
 import org.usvm.UMachineOptions
 import org.usvm.solver.USatResult
+import org.usvm.solver.UUnsatResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -44,11 +45,11 @@ class SymbolicAddressTest {
         rodata = rodata,
     )
 
-    private fun SbpfState.reg(index: Int): UExpr<UBvSort> = memory.stack.readRegister(index, ctx.bv64Sort)
+    private fun SbpfState.register(index: Int): UExpr<UBvSort> = memory.stack.readRegister(index, ctx.bv64Sort)
 
     private fun SbpfState.value(index: Int): ULong {
         val model = models.single()
-        return (model.eval(reg(index)) as KBitVec64Value).longValue.toULong()
+        return (model.eval(register(index)) as KBitVec64Value).longValue.toULong()
     }
 
     // The two implementations of the key agree on every region boundary.
@@ -122,15 +123,63 @@ class SymbolicAddressTest {
             val ctx = state.ctx
             val solver = ctx.solver<SbpfType>()
             fun modelWith(address: ULong) = state.clone().let { copy ->
-                copy.pathConstraints += ctx.mkEq(copy.reg(5), ctx.mkBv(address.toLong(), 64u))
+                copy.pathConstraints += ctx.mkEq(copy.register(5), ctx.mkBv(address.toLong(), 64u))
                 val result = solver.check(copy.pathConstraints)
                 check(result is USatResult) { "a == 0x${address.toString(16)} is infeasible" }
                 result.model
             }
             val hit = modelWith(x)
-            assertEquals(hit.eval(state.reg(3)), hit.eval(state.reg(6)), "a == X: the load sees the store")
+            assertEquals(hit.eval(state.register(3)), hit.eval(state.register(6)), "a == X: the load sees the store")
             val miss = modelWith(x + 1uL)
-            assertEquals(ctx.mkBv(0L, 64u), miss.eval(state.reg(6)), "a == X + 1: the byte at X is untouched")
+            assertEquals(ctx.mkBv(0L, 64u), miss.eval(state.register(6)), "a == X + 1: the byte at X is untouched")
+        }
+    }
+
+    // A 64-bit symbolic value stored at a symbolic stack address and loaded back from the same address: every
+    // byte lands at addr + k and comes back from there, so the loaded word equals the stored one on every model.
+    @Test
+    fun wideStoreAndLoadBySymbolicAddress() {
+        val ir = program(
+            load(0, 3, Width.W64, reg(2)),
+            load(1, 4, Width.W8, bin(BinOp.Add, reg(2), imm(8uL))),
+            assign(2, 4, bin(BinOp.And, reg(4), imm(7uL))),
+            assign(3, 5, bin(BinOp.Add, reg(4), imm(MM_STACK_START + 0x100uL))),
+            store(4, Width.W64, reg(5), reg(3)),
+            load(5, 6, Width.W64, reg(5)),
+        )
+        SbpfMachine(ir, input = symbolicIx(9)).use { machine ->
+            val state = machine.analyze().single()
+            val ctx = state.ctx
+            val differ = state.clone()
+            differ.pathConstraints += ctx.mkNot(ctx.mkEq(differ.register(3), differ.register(6)))
+            assertTrue(ctx.solver<SbpfType>().check(differ.pathConstraints) is UUnsatResult, "r6 == r3 on every model")
+            assertEquals(state.value(3), state.value(6))
+        }
+    }
+
+    // A 4-byte load at a symbolic offset into the input: the whole word must fit, so the valid offsets end at
+    // size − 4, and size − 3 is an AccessViolation.
+    @Test
+    fun wideLoadForksAtTheRegionEnd() {
+        val input = symbolicIx(1)
+        val ir = program(
+            load(0, 3, Width.W8, reg(2)),
+            load(1, 4, Width.W32, bin(BinOp.Add, reg(1), reg(3))),
+        )
+        SbpfMachine(ir, input = input).use { machine ->
+            val states = machine.analyze()
+            val ok = states.single { it.result == SbpfResult.Exited }
+            val violation = states.single { it.result == SbpfResult.AccessViolation }
+            val ctx = ok.ctx
+            val solver = ctx.solver<SbpfType>()
+            fun feasible(state: SbpfState, offset: Int): Boolean = state.clone().let { copy ->
+                copy.pathConstraints += ctx.mkEq(copy.register(3), ctx.mkBv(offset.toLong(), 64u))
+                solver.check(copy.pathConstraints) is USatResult
+            }
+            assertTrue(feasible(ok, input.size - 4), "the last whole word is readable")
+            assertTrue(!feasible(ok, input.size - 3), "a word crossing the end is not readable")
+            assertTrue(feasible(violation, input.size - 3), "the crossing word is an AccessViolation")
+            assertTrue(!feasible(violation, input.size - 4))
         }
     }
 

@@ -6,6 +6,7 @@ import org.sbpf.symex.ir.Expr
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
 import org.sbpf.symex.ir.Stmt
+import org.sbpf.symex.ir.Width
 import org.sbpf.symex.machine.memory.DEFAULT_HEAP_SIZE
 import org.sbpf.symex.machine.memory.InputSpec
 import org.sbpf.symex.machine.memory.accessCondition
@@ -16,9 +17,9 @@ import org.sbpf.symex.machine.memory.memoryModel
 import org.sbpf.symex.machine.memory.storeConst
 import org.sbpf.symex.machine.memory.storeSymbolic
 import org.usvm.StepResult
-import org.usvm.UExpr
 import org.usvm.StepScope
 import org.usvm.UBvSort
+import org.usvm.UExpr
 import org.usvm.UInterpreter
 import org.usvm.collections.immutable.internal.MutabilityOwnership
 import org.usvm.forkblacklists.UForkBlackList
@@ -76,33 +77,21 @@ class SbpfInterpreter(
         return scope.stepResult()
     }
 
-    // A failing access ends the path with AccessViolation, like a trap: the path is alive, the error is its result.
-    // A constant address is checked in Kotlin and takes one side; a symbolic one forks on the bounds condition,
-    // and the access itself happens inside the fork block, on the side where it is valid.
     private fun visitLoad(scope: SbpfStepScope, stmt: Stmt.Load) {
         val addr = scope.calcOnState { address(stmt.addr, stmt.pc) }
         val next = graph.successors(stmt).single()
-        val constAddr = addr.constValue()
-        if (constAddr != null) {
-            scope.doWithState {
-                val value = loadConst(constAddr, stmt.width)
-                if (value == null) {
-                    result = SbpfResult.AccessViolation
-                } else {
-                    memory.stack.writeRegister(stmt.dst, value)
-                    newStep(next)
-                }
-            }
-            return
-        }
-        val inBounds = scope.calcOnState { memoryModel.layout.accessCondition(ctx, addr, stmt.width.bits / 8, store = false) }
-        scope.fork(
-            inBounds,
-            blockOnTrueState = {
+        memoryAccess(
+            scope, addr, stmt.width, store = false,
+            onConst = { constAddr ->
+                val value = loadConst(constAddr, stmt.width) ?: return@memoryAccess false
+                memory.stack.writeRegister(stmt.dst, value)
+                newStep(next)
+                true
+            },
+            onSymbolic = {
                 memory.stack.writeRegister(stmt.dst, loadSymbolic(addr, stmt.width))
                 newStep(next)
             },
-            blockOnFalseState = { result = SbpfResult.AccessViolation },
         )
     }
 
@@ -110,20 +99,38 @@ class SbpfInterpreter(
         val (addr, value) = scope.calcOnState { address(stmt.addr, stmt.pc) to translator().bv(stmt.value) }
         require(value.bits == stmt.width.bits) { "pc ${stmt.pc}: store of ${value.bits} bits as ${stmt.width}" }
         val next = graph.successors(stmt).single()
-        val constAddr = addr.constValue()
-        if (constAddr != null) {
-            scope.doWithState {
-                if (storeConst(constAddr, value)) newStep(next) else result = SbpfResult.AccessViolation
-            }
-            return
-        }
-        val inBounds = scope.calcOnState { memoryModel.layout.accessCondition(ctx, addr, stmt.width.bits / 8, store = true) }
-        scope.fork(
-            inBounds,
-            blockOnTrueState = {
+        memoryAccess(
+            scope, addr, stmt.width, store = true,
+            onConst = { constAddr -> storeConst(constAddr, value).also { if (it) newStep(next) } },
+            onSymbolic = {
                 storeSymbolic(addr, value)
                 newStep(next)
             },
+        )
+    }
+
+    // A failing access ends the path with AccessViolation, like a trap: the path is alive, the error is its result.
+    // A constant address is checked in Kotlin (onConst returns false on a violation) and takes one side; a symbolic
+    // one forks on the bounds condition, and the access itself happens inside the fork block, on the valid side.
+    private fun memoryAccess(
+        scope: SbpfStepScope,
+        addr: UExpr<UBvSort>,
+        width: Width,
+        store: Boolean,
+        onConst: SbpfState.(ULong) -> Boolean,
+        onSymbolic: SbpfState.() -> Unit,
+    ) {
+        val constAddr = addr.constValue()
+        if (constAddr != null) {
+            scope.doWithState { if (!onConst(constAddr)) result = SbpfResult.AccessViolation }
+            return
+        }
+        val inBounds = scope.calcOnState {
+            memoryModel.layout.accessCondition(ctx, addr, width.bits / 8, store)
+        }
+        scope.fork(
+            inBounds,
+            blockOnTrueState = { onSymbolic() },
             blockOnFalseState = { result = SbpfResult.AccessViolation },
         )
     }

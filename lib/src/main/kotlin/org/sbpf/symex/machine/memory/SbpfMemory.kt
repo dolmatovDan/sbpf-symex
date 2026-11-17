@@ -117,8 +117,14 @@ private fun SbpfState.ensureRodataInMemory() {
     if (model.rodata.isEmpty()) return
     val content = model.rodata.map { ctx.mkBv(it) as ByteExpr }
     updateByteRegion { region ->
-        val withRo =
-            region.initializeAllocatedArray(model.ro.address, SbpfType, ctx.bv8Sort, content, ctx.trueExpr, memory.ownership)
+        val withRo = region.initializeAllocatedArray(
+            address = model.ro.address,
+            arrayType = SbpfType,
+            sort = ctx.bv8Sort,
+            content = content,
+            operationGuard = ctx.trueExpr,
+            ownership = memory.ownership,
+        )
         copyInto(withRo, model.ro, key(model.layout.rodata.start), model.rodata.size)
     }
 }
