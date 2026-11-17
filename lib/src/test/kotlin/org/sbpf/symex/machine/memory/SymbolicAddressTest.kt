@@ -159,12 +159,11 @@ class SymbolicAddressTest {
             differ.pathConstraints += ctx.mkNot(ctx.mkEq(differ.register(3), differ.register(6)))
             assertTrue(solver.check(differ.pathConstraints) is UUnsatResult, "r6 == r3 on every model")
             assertEquals(state.value(3), state.value(6))
+            val byte3 = ctx.zextTo(Width.W64, ctx.mkBvExtractExpr(31, 24, state.register(3)))
             val hit = state.clone()
             hit.pathConstraints += ctx.mkEq(hit.register(5), ctx.mkBv(x.toLong(), 64u))
-            val model = solver.check(hit.pathConstraints)
-            check(model is USatResult)
-            val byte3 = ctx.zextTo(Width.W64, ctx.mkBvExtractExpr(31, 24, state.register(3)))
-            assertEquals(model.model.eval(byte3), model.model.eval(state.register(7)), "a == X: [X + 3] is byte 3")
+            hit.pathConstraints += ctx.mkNot(ctx.mkEq(hit.register(7), byte3))
+            assertTrue(solver.check(hit.pathConstraints) is UUnsatResult, "a == X: [X + 3] is byte 3 on every model")
         }
     }
 
