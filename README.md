@@ -65,7 +65,7 @@ X.s / X.rs ──► X.so ──┬── sbpf-lift lift ──► IR JSON ─�
 - `run(example, version)` исполняет пример раннера с `--registers --trace`. Пример с `.v0.so` собран под обе версии, для v3 пишется копия примера с путём `.v3.so`. Пример с `.v3.so` — программа только под v3 (например, jmp32, которого нет в v0); версии примера даёт `versionsOf`.
 - У задачи `test` входами объявлены бинарь `sbpf-lift`, `tests/examples` и `tests/programs/bin`: после правки лифтера или примеров тесты перезапускаются, а не считаются UP-TO-DATE.
 
-- `inputOf(example)` отдаёт машине `program_id` и `instruction_data` примера (`InputSpec`, режим `Concrete`); примеры с аккаунтами пока отклоняются.
+- `inputOf(example)` отдаёт машине `program_id` и `instruction_data` примера (`InputSpec`, режим `Concrete`); примеры с непустым `accounts` пока отклоняются (пустой список — та раскладка, которую моделируем).
 
 Входы известны (регистры как у VM, `instruction_data` из примера ограничивает символьные байты input), поэтому у каждой программы ровно один путь.
 
