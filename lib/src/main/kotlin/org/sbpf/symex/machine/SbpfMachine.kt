@@ -5,6 +5,7 @@ import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
+import org.sbpf.symex.machine.memory.DEFAULT_HEAP_SIZE
 import org.sbpf.symex.machine.memory.InputSpec
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.toPathResult
@@ -28,6 +29,8 @@ class SbpfMachine(
     private val recordTrace: Boolean = false,
     // Input region: program id and instruction data (concrete bytes or a symbolic string of a known length).
     private val input: InputSpec = InputSpec.EMPTY,
+    // Heap size of the run: the VM takes it from the transaction (32 KiB by default, up to 256 KiB).
+    private val heapSize: ULong = DEFAULT_HEAP_SIZE,
 ) : UMachine<SbpfState>() {
     private val graph = SbpfApplicationGraph(module)
     private val ctx = SbpfContext(SbpfComponents(options))
@@ -43,7 +46,7 @@ class SbpfMachine(
             SbpfLoopTracker(module, graph),
             options.loopIterationLimit,
         )
-        pathSelector.add(listOf(interpreter.getInitialState(module, input)))
+        pathSelector.add(listOf(interpreter.getInitialState(module, input, heapSize)))
 
         val statesCollector = AllStatesCollector<SbpfState>()
         // The limit reads the observer's counter: the same object must be among the observers.

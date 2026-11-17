@@ -145,6 +145,16 @@ class SbpfMemoryTest {
         assertEquals(path.registers[1] + 16uL, path.registers[2])
     }
 
+    // The heap size is a parameter of the machine: the last byte of a 64 KiB heap is readable, past it is not.
+    @Test
+    fun heapSize() {
+        val end = MM_HEAP_START + 0x10000uL
+        val ir = program(assign(0, 1, imm(end - 1uL)), load(1, 2, Width.W8, reg(1)), load(2, 3, Width.W8, at(1, 1)))
+        val path = SbpfMachine(ir, recordTrace = true, heapSize = 0x10000uL).use { it.results() }.single()
+        assertViolation(path, 2uL)
+        assertViolation(pathOf(ir), 1uL)
+    }
+
     // Untouched heap reads as zeros; a store is read back.
     @Test
     fun heap() {
