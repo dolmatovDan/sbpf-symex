@@ -112,7 +112,7 @@ sbpf-symex/
     │   │   │                   # SbpfApplicationGraph, SbpfComponents, перевод выражений, Entry (регистры VM),
     │   │   │                   # Loops и SbpfLoopTracker (циклы для лимитера)
     │   │   └── memory/         # MemoryLayout (регионы, ключи, условие доступа), Input (раскладка input,
-    │   │                       # base58), SbpfMemory (массивы usvm, load/store, копия rodata)
+    │   │                       # base58), SbpfMemory (массивы usvm, load/store, rodata через ite из массива ro)
     │   └── result/             # PathResult: статус, ошибка, регистры и трасса завершённого пути
     └── test/kotlin/org/sbpf/symex/
         ├── runner/             # SbpfRunner (sbpf-lift lift/run вживую), модель Outcome

@@ -18,9 +18,11 @@ private const val ROOT = -2
 // Natural loops: a back edge u -> h with h dominating u; the body is h plus everything that reaches u without
 // passing through h; loops with the same header are merged. The graph is the whole module's: blocks are unique
 // across functions, and a jump into another function (ir.md allows it) is an ordinary edge, so a loop through two
-// functions is found too. Edges are the exits' targets (Exit.targets). Irreducible loops (entered in the middle,
-// also from another function's entry) have no back edge in this sense and are not found: there only the step
-// limit holds.
+// functions is found too. Edges are the exits' targets (Exit.targets). Irreducible loops (entered in the middle)
+// have no back edge in this sense and are not found: there only the step limit holds. This includes a loop inside
+// one function whose body (not header) is jumped into from another function: on the module graph the header no
+// longer dominates the body, whereas a per-function search would have found it. Accepted: such jumps are rare and
+// the step limit still bounds the path.
 fun findLoops(module: IrModule): List<Loop> {
     val blocks = module.functions.flatMap { it.blocks }.associateBy { it.start }
     val successors = blocks.mapValues { (_, block) -> block.exit.targets().filter { it in blocks } } +

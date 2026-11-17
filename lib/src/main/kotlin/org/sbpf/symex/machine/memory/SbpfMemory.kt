@@ -19,9 +19,9 @@ import org.usvm.collection.array.UArrayRegionId
 // Memory of one path (memory-notes.md, 7). All writable VM regions live in one byte array `mem`, an allocated usvm
 // array: an untouched byte reads as 0, which is what the stack and the heap need. The instruction data is copied
 // into it from `input0`, an input array whose untouched bytes are fresh symbols; the rest of the input region (the
-// layout) is written as constants. rodata is never written, so it stays in its own array `ro` and a load takes it
-// from there. The array index is the 32-bit key of MemoryLayout, so a constant address resolves through the update
-// log without the solver.
+// layout) is written as constants. rodata is never written, so it stays in its own array `ro`: a symbolic load
+// takes it from there, a constant one reads the ByteArray directly. The array index is the 32-bit key of
+// MemoryLayout, so a constant address resolves through the update log without the solver.
 class SbpfMemoryModel(
     val layout: MemoryLayout,
     // rodata is immutable: a load from a constant address takes the byte from here, not from an array.
