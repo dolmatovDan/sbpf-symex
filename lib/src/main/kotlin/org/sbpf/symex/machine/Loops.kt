@@ -1,0 +1,96 @@
+package org.sbpf.symex.machine
+
+import org.sbpf.symex.ir.Exit
+import org.sbpf.symex.ir.IrFunction
+import org.sbpf.symex.ir.Step
+
+// A natural loop of a function, on the graph of its blocks (identified by start pc). The body includes the header.
+// forkPoints are the branch exits inside the body whose outcome decides whether the iteration ends: the limiter
+// (SbpfLoopTracker) counts an iteration as symbolic only if the path forked at one of them.
+class Loop(val header: Int, val body: Set<Int>, val forkPoints: Set<Step>) {
+    override fun toString() = "loop at $header, body $body"
+}
+
+// Natural loops: a back edge u -> h with h dominating u; the body is h plus everything that reaches u without
+// passing through h; loops with the same header are merged. Edges are the exits' targets (Exit.targets); a target
+// outside the function (ir.md allows a jump into another function) is an exit from the loop. Irreducible loops
+// (entered in the middle) have no back edge in this sense and are not found: there only the step limit holds.
+fun findLoops(function: IrFunction): List<Loop> {
+    val blocks = function.blocks.associateBy { it.start }
+    val successors = blocks.mapValues { (_, block) -> block.exit.targets().filter { it in blocks } }
+    val reachable = reachableFrom(function.entry, successors)
+    val predecessors = reachable.associateWith { mutableListOf<Int>() }
+    for (node in reachable) for (next in successors.getValue(node)) predecessors.getValue(next) += node
+    val dominators = dominators(reachable, function.entry, predecessors)
+
+    val bodies = linkedMapOf<Int, MutableSet<Int>>()
+    for (tail in reachable) {
+        for (header in successors.getValue(tail)) {
+            if (header !in dominators.getValue(tail)) continue
+            val body = bodies.getOrPut(header) { mutableSetOf(header) }
+            // Everything that reaches the tail without passing through the header.
+            val work = ArrayDeque(listOf(tail))
+            while (work.isNotEmpty()) {
+                val node = work.removeFirst()
+                if (!body.add(node)) continue
+                work += predecessors.getValue(node)
+            }
+        }
+    }
+    return bodies.map { (header, body) -> Loop(header, body, forkPoints(header, body, blocks.mapValues { it.value.exit })) }
+}
+
+// Branches that can end the iteration (JcLoopTracker's LoopExecutionPathAnalyzer): in the graph of one iteration,
+// where the back edges and the exits from the body all lead to a single ITERATION_EXIT node, a branch block is a
+// fork point unless some other block post-dominates it, i.e. both outcomes rejoin before the iteration ends.
+private fun forkPoints(header: Int, body: Set<Int>, exits: Map<Int, Exit>): Set<Step> {
+    val iterationExit = -1
+    val nodes = body + iterationExit
+    val successors = nodes.associateWith { node ->
+        if (node == iterationExit) {
+            emptyList()
+        } else {
+            exits.getValue(node).targets().map { if (it in body && it != header) it else iterationExit }.distinct()
+        }
+    }
+    val predecessors = nodes.associateWith { mutableListOf<Int>() }
+    for (node in nodes) for (next in successors.getValue(node)) predecessors.getValue(next) += node
+    // Post-dominators are dominators of the reversed graph, rooted at the iteration exit.
+    val postDominators = dominators(nodes, iterationExit, successors)
+    return body
+        .filter { exits.getValue(it) is Exit.Branch }
+        .filter { block -> postDominators.getValue(block).all { it == block || it == iterationExit } }
+        .map { exits.getValue(it) }
+        .toSet()
+}
+
+private fun reachableFrom(entry: Int, successors: Map<Int, List<Int>>): Set<Int> {
+    val seen = linkedSetOf<Int>()
+    val work = ArrayDeque(listOf(entry))
+    while (work.isNotEmpty()) {
+        val node = work.removeFirst()
+        if (!seen.add(node)) continue
+        work += successors.getValue(node)
+    }
+    return seen
+}
+
+// Iterative dominators: dom(root) = {root}, dom(n) = {n} ∪ ∩ dom(p) over the predecessors p, to a fixpoint.
+// Every node must be reachable from the root, otherwise an empty intersection would make it dominated by everything.
+private fun dominators(nodes: Set<Int>, root: Int, predecessors: Map<Int, List<Int>>): Map<Int, Set<Int>> {
+    val dominators = nodes.associateWith { if (it == root) setOf(root) else nodes }.toMutableMap()
+    var changed = true
+    while (changed) {
+        changed = false
+        for (node in nodes) {
+            if (node == root) continue
+            val meet = predecessors.getValue(node).map { dominators.getValue(it) }.reduce { a, b -> a intersect b }
+            val updated = meet + node
+            if (updated != dominators.getValue(node)) {
+                dominators[node] = updated
+                changed = true
+            }
+        }
+    }
+    return dominators
+}
