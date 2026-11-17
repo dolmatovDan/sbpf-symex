@@ -4,6 +4,7 @@ import io.ksmt.expr.KBitVec64Value
 import io.ksmt.sort.KBv64Sort
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.IrModule
+import org.sbpf.symex.machine.memory.InputSpec
 import org.sbpf.symex.result.PathResult
 import org.sbpf.symex.result.toPathResult
 import org.usvm.StateCollectionStrategy
@@ -23,6 +24,8 @@ class SbpfMachine(
     override val options: UMachineOptions = defaultOptions,
     // Record the per-instruction register trace (SbpfState.trace).
     private val recordTrace: Boolean = false,
+    // Input region: program id and instruction data (concrete bytes or a symbolic string of a known length).
+    private val input: InputSpec = InputSpec.EMPTY,
 ) : UMachine<SbpfState>() {
     private val graph = SbpfApplicationGraph(module)
     private val ctx = SbpfContext(SbpfComponents(options))
@@ -32,7 +35,7 @@ class SbpfMachine(
     // Raw finished states, like TvmMachine.analyze.
     fun analyze(): List<SbpfState> {
         val pathSelector = DfsPathSelector<SbpfState>()
-        pathSelector.add(listOf(interpreter.getInitialState(module)))
+        pathSelector.add(listOf(interpreter.getInitialState(module, input)))
 
         val statesCollector = AllStatesCollector<SbpfState>()
         // The limit reads the observer's counter: the same object must be among the observers.

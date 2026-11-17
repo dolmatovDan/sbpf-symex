@@ -1,5 +1,6 @@
 package org.sbpf.symex.machine
 
+import org.sbpf.symex.machine.memory.InputSpec
 import org.sbpf.symex.machine.memory.MM_INPUT_START
 import org.sbpf.symex.machine.memory.MM_STACK_START
 
@@ -8,12 +9,11 @@ const val STACK_FRAME_SIZE = 0x1000uL
 
 // Registers r0–r10 at program entry, as set by agave 4.3: r10 from solana-sbpf vm.rs:381,
 // r1 and r2 from solana-program-runtime vm.rs:312-313. The rest are 0.
-// r2 is the instruction data address (SIMD-0321). Without accounts, the data is preceded only by the account count
-// and the data length, 8 bytes each (serialization.rs:589-590). Accounts will come together with memory.
-fun entryRegisters(): List<ULong> = List(REGISTER_COUNT) { index ->
+// r2 is the instruction data address (SIMD-0321): its offset inside the input region comes from the layout.
+fun entryRegisters(input: InputSpec = InputSpec.EMPTY): List<ULong> = List(REGISTER_COUNT) { index ->
     when (index) {
         1 -> MM_INPUT_START
-        2 -> MM_INPUT_START + 16uL
+        2 -> MM_INPUT_START + input.ixOffset.toULong()
         10 -> MM_STACK_START + STACK_FRAME_SIZE
         else -> 0uL
     }

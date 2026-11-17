@@ -5,6 +5,7 @@ import kotlinx.collections.immutable.persistentListOf
 import org.sbpf.symex.ir.Fault
 import org.sbpf.symex.ir.IrFunction
 import org.sbpf.symex.ir.Step
+import org.sbpf.symex.machine.memory.SbpfMemoryModel
 import org.usvm.PathNode
 import org.usvm.UCallStack
 import org.usvm.UState
@@ -33,6 +34,9 @@ class SbpfState(
     var result: SbpfResult? = null,
     // Written by TraceObserver if tracing is enabled. Immutable list: the copy shares it with the original.
     var trace: PersistentList<TraceEntry> = persistentListOf(),
+    // Set once by initializeMemory on the initial state; the layout and the array references are the same on every
+    // path, the contents live in memory.
+    var memoryModelOrNull: SbpfMemoryModel? = null,
 ) : UState<SbpfType, IrFunction, Step, SbpfContext, SbpfTarget, SbpfState>(
     ctx,
     ownership,
@@ -68,10 +72,11 @@ class SbpfState(
             targets.clone(),
             result,
             trace,
+            memoryModelOrNull,
         )
     }
 
-    override val isExceptional: Boolean get() = result is SbpfResult.Failed
+    override val isExceptional: Boolean get() = result is SbpfResult.Failed || result is SbpfResult.AccessViolation
 }
 
 // One field for the path outcome: "finished" and "failed" are mutually exclusive, like JcMethodResult in JcState.
@@ -82,6 +87,10 @@ sealed interface SbpfResult {
 
     // The path ended with a VM error: a check failed or a trap was reached.
     data class Failed(val fault: Fault) : SbpfResult
+
+    // A load or store outside the regions, or a store into a read-only one. Not an IR Fault: the IR has no memory
+    // checks, the memory model decides (sbpf-ir/docs/ir.md, "load/store").
+    data object AccessViolation : SbpfResult
 }
 
 val SbpfState.lastStep: Step get() = pathNode.statement

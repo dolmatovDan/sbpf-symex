@@ -10,6 +10,8 @@ import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.RoRegion
 import org.sbpf.symex.ir.Stmt
 import org.sbpf.symex.ir.Width
+import org.sbpf.symex.machine.memory.MM_RODATA_V0_START
+import org.sbpf.symex.machine.memory.MM_RODATA_V3_START
 
 // IR for machine tests is built with the model's constructors, without JSON.
 
@@ -23,17 +25,27 @@ fun assign(pc: Int, dst: Int, value: Expr) = Stmt.Assign(pc, dst, value)
 
 fun check(pc: Int, cond: Expr, error: Fault = Fault.DivideByZero) = Stmt.Check(pc, cond, error)
 
+fun load(pc: Int, dst: Int, width: Width, addr: Expr) = Stmt.Load(pc, dst, width, addr)
+
+fun store(pc: Int, width: Width, addr: Expr, value: Expr) = Stmt.Store(pc, width, addr, value)
+
 fun block(start: Int, vararg statements: Stmt, exit: Exit) =
     IrBlock(start, noreturn = false, statements = statements.toList(), exit = exit)
 
 fun function(name: String, vararg blocks: IrBlock) = IrFunction(blocks.first().start, name, blocks.toList())
 
-fun module(vararg functions: IrFunction, entrypoint: Int = functions.first().entry) = IrModule(
+// rodata is placed where the loader puts it for the version (memory-notes.md, 1.4): slot 1 in v0, slot 0 in v3.
+fun module(
+    vararg functions: IrFunction,
+    entrypoint: Int = functions.first().entry,
+    sbpfVersion: Int = 3,
+    rodata: ByteArray = ByteArray(0),
+) = IrModule(
     formatVersion = 1,
-    sbpfVersion = 3,
+    sbpfVersion = sbpfVersion,
     entrypoint = entrypoint,
     textVaddr = 0x100000000uL,
-    roRegion = RoRegion(0uL, ByteArray(0)),
+    roRegion = RoRegion(if (sbpfVersion == 0) MM_RODATA_V0_START else MM_RODATA_V3_START, rodata),
     addressTaken = emptyList(),
     functions = functions.toList(),
 )
