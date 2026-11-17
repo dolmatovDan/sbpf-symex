@@ -8,6 +8,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.sbpf.symex.ir.IrJson
 import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.parseIr
+import org.sbpf.symex.machine.memory.InputSpec
+import org.sbpf.symex.machine.memory.IxMode
+import org.sbpf.symex.machine.memory.decodeBase58
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.ExperimentalPathApi
@@ -41,6 +44,17 @@ class SbpfRunner(sbpfIr: Path) {
     // sBPF versions the example runs on: an example on .v0.so is built for v0 and v3, one on .v3.so only for v3
     // (jmp32 exists only in v3).
     fun versionsOf(example: Path): List<Int> = programBaseAndVersions(example).second
+
+    // The machine's input for the example: the program id and the instruction data, so the symbolic run sees the
+    // same input region as the runner. Accounts are not modeled yet.
+    fun inputOf(example: Path): InputSpec {
+        val json = readExample(example)
+        require("accounts" !in json) { "$example: accounts are not supported by the machine yet" }
+        val programId = decodeBase58(json.getValue("program_id").jsonPrimitive.content)
+        val ix = json.getValue("instruction_data").jsonPrimitive.content
+            .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        return InputSpec(programId, IxMode.Concrete(ix))
+    }
 
     // The program for a given version is the sibling .v<version>.so of the one in the example.
     fun programOf(example: Path, version: Int): Path {
