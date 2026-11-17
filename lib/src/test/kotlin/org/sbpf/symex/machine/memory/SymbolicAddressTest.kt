@@ -56,7 +56,7 @@ class SymbolicAddressTest {
     @Test
     fun symbolicKeyMatchesKey() {
         val ctx = SbpfContext(SbpfComponents(UMachineOptions()))
-        val layout = MemoryLayout(0, RoRegion(MM_RODATA_V0_START + 0x120uL, ByteArray(216)), 64uL)
+        val layout = MemoryLayout(0, RoRegion(MM_RODATA_V0_START, ByteArray(504)), 64uL)
         ctx.use {
             for (region in layout.regions) {
                 for (addr in listOf(region.start, region.end - 1uL)) {

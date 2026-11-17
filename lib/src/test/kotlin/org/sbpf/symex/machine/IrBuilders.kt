@@ -34,8 +34,7 @@ fun block(start: Int, vararg statements: Stmt, exit: Exit) =
 
 fun function(name: String, vararg blocks: IrBlock) = IrFunction(blocks.first().start, name, blocks.toList())
 
-// rodata starts at its slot for the version (memory-notes.md, 1.4): slot 1 in v0, slot 0 in v3. The real v0 loader
-// starts the region at the first section, not at the slot start; tests that need that build RoRegion themselves.
+// rodata starts at its slot for the version (memory-notes.md, 1.4): slot 1 in v0, slot 0 in v3, as the loader maps it.
 fun module(
     vararg functions: IrFunction,
     entrypoint: Int = functions.first().entry,

@@ -60,12 +60,12 @@ class MemoryLayout(
     val input = MemoryRegion("input", MM_INPUT_START, inputSize, writable = true)
 
     init {
-        // v0: code and rodata in slot 1; v3: only rodata, in slot 0 (memory-notes.md, 1.4). The region starts where
-        // the loader maps it (the lifter runs it with agave's optimize_rodata = false, so in v0 that is the slot
-        // start with zeros up to the first section); only the slot is checked here, the start is taken as given.
-        val expectedSlot = if (sbpfVersion == 0) MM_RODATA_V0_START else MM_RODATA_V3_START
-        require(roRegion.vaddr shr 32 == expectedSlot shr 32) {
-            "ro_region at 0x${roRegion.vaddr.toString(16)} in sBPF v$sbpfVersion, expected slot ${expectedSlot shr 32}"
+        // v0: code and rodata in slot 1; v3: only rodata, in slot 0 (memory-notes.md, 1.4). The loader (agave's
+        // optimize_rodata = false, which the lifter copies) always starts the region at the slot start: in v0 the
+        // bytes below the first section are zeros. A different start means the lifter's loader config changed.
+        val expectedStart = if (sbpfVersion == 0) MM_RODATA_V0_START else MM_RODATA_V3_START
+        require(roRegion.vaddr == expectedStart) {
+            "ro_region at 0x${roRegion.vaddr.toString(16)} in sBPF v$sbpfVersion, expected 0x${expectedStart.toString(16)}"
         }
         rodata = MemoryRegion("rodata", roRegion.vaddr, roRegion.data.size.toULong(), writable = false)
     }

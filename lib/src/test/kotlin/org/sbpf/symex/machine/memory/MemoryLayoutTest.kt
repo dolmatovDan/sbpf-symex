@@ -26,19 +26,14 @@ class MemoryLayoutTest {
         assertEquals(MM_HEAP_START, v3.heap.start)
         assertEquals(MM_INPUT_START, v3.input.start)
         assertEquals(DEFAULT_HEAP_SIZE, v3.heap.size)
-        // The lifter's region slot must match the version: a mismatch means the lifter changed.
+        // The region must start at the slot start: anything else means the lifter's loader config changed
+        // (with optimize_rodata = true the v0 region would start at the first section).
         assertFailsWith<IllegalArgumentException> {
             MemoryLayout(0, RoRegion(MM_RODATA_V3_START, ByteArray(1)), 16uL)
         }
-    }
-
-    // The region start is taken from the IR as is: below it the slot is not mapped.
-    @Test
-    fun rodataNotAtSlotStart() {
-        val l = MemoryLayout(0, RoRegion(MM_RODATA_V0_START + 0x120uL, ByteArray(216)), 64uL)
-        assertSame(l.rodata, l.findRegion(MM_RODATA_V0_START + 0x120uL, 8, store = false))
-        assertNull(l.findRegion(MM_RODATA_V0_START + 0x118uL, 8, store = false))
-        assertNull(l.findRegion(MM_RODATA_V0_START, 1, store = false))
+        assertFailsWith<IllegalArgumentException> {
+            MemoryLayout(0, RoRegion(MM_RODATA_V0_START + 0x120uL, ByteArray(216)), 16uL)
+        }
     }
 
     // The last n bytes of a region are accessible; one byte further is not, whatever the width.
