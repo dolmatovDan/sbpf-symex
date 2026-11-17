@@ -65,7 +65,8 @@ class MemoryLayout(
         // bytes below the first section are zeros. A different start means the lifter's loader config changed.
         val expectedStart = if (sbpfVersion == 0) MM_RODATA_V0_START else MM_RODATA_V3_START
         require(roRegion.vaddr == expectedStart) {
-            "ro_region at 0x${roRegion.vaddr.toString(16)} in sBPF v$sbpfVersion, expected 0x${expectedStart.toString(16)}"
+            "ro_region at 0x${roRegion.vaddr.toString(16)} in sBPF v$sbpfVersion, " +
+                "expected 0x${expectedStart.toString(16)}"
         }
         rodata = MemoryRegion("rodata", roRegion.vaddr, roRegion.data.size.toULong(), writable = false)
     }
