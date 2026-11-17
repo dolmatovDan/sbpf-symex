@@ -194,6 +194,36 @@ class SymbolicAddressTest {
         }
     }
 
+    // With a non-empty rodata a symbolic load picks between ro and mem by the address: at the stack address it sees
+    // the byte stored there, at the rodata address the rodata byte, each on every model.
+    @Test
+    fun loadPicksRodataOrMemoryByAddress() {
+        val x = MM_STACK_START + 0x100uL
+        val ir = program(
+            load(0, 3, Width.W8, reg(2)),
+            assign(1, 4, bin(BinOp.And, reg(3), imm(1uL))),
+            assign(2, 5, bin(BinOp.Mul, reg(4), imm(x))),
+            assign(3, 6, imm(x)),
+            store(4, Width.W8, reg(6), imm(0x77uL, Width.W8)),
+            load(5, 7, Width.W8, reg(5)),
+            rodata = byteArrayOf(1, 2, 3, 4),
+        )
+        SbpfMachine(ir, input = symbolicIx(1)).use { machine ->
+            val state = machine.analyze().single()
+            val ctx = state.ctx
+            val solver = ctx.solver<SbpfType>()
+            fun mustRead(bit: Long, expected: Long) {
+                val copy = state.clone()
+                copy.pathConstraints += ctx.mkEq(copy.register(4), ctx.mkBv(bit, 64u))
+                assertTrue(solver.check(copy.pathConstraints) is USatResult, "bit $bit is feasible")
+                copy.pathConstraints += ctx.mkNot(ctx.mkEq(copy.register(7), ctx.mkBv(expected, 64u)))
+                assertTrue(solver.check(copy.pathConstraints) is UUnsatResult, "bit $bit reads $expected")
+            }
+            mustRead(bit = 1, expected = 0x77)
+            mustRead(bit = 0, expected = 1)
+        }
+    }
+
     // The address is either rodata (bit 0 clear) or the stack: the store forks, the rodata side is an
     // AccessViolation and its model has the bit clear.
     @Test

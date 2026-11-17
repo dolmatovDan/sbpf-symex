@@ -41,8 +41,8 @@ class SbpfRunnerTest {
         }
     }
 
-    // The input the machine gets is the example's: instruction data from hex, the program id from base58;
-    // an example with accounts is rejected until accounts are modeled (an empty list is the layout we model).
+    // The input the machine gets is the example's: instruction data from hex (whole bytes only), the program id from
+    // base58; an example with accounts is rejected until accounts are modeled (an empty list is the layout we model).
     @Test
     fun inputOfExample() {
         val memory = runner.inputOf(runner.examples.resolve("asm/memory.json"))
@@ -52,20 +52,20 @@ class SbpfRunnerTest {
         assertContentEquals(expected, ix.bytes)
         assertEquals(0x02, memory.programId[0].toInt())
         assertEquals(0, runner.inputOf(alu64).ix.length)
-        val withAccounts = createTempFile(suffix = ".json")
+        val example = createTempFile(suffix = ".json")
         try {
             val header = """{"program": "x.v0.so", "program_id": "Asm1111111111111111111111111111111111111111","""
-            withAccounts.writeText("""$header "instruction_data": "", "accounts": []}""")
-            assertEquals(0, runner.inputOf(withAccounts).ix.length)
+            example.writeText("""$header "instruction_data": "", "accounts": []}""")
+            assertEquals(0, runner.inputOf(example).ix.length)
             val account = """{"key": "Asm1111111111111111111111111111111111111111",
                                  "owner": "11111111111111111111111111111111", "lamports": 1}"""
-            withAccounts.writeText("""$header "instruction_data": "", "accounts": [$account]}""")
-            assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
+            example.writeText("""$header "instruction_data": "", "accounts": [$account]}""")
+            assertFailsWith<IllegalArgumentException> { runner.inputOf(example) }
             // An odd number of hex digits would otherwise silently become an extra byte.
-            withAccounts.writeText("""$header "instruction_data": "abc"}""")
-            assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
+            example.writeText("""$header "instruction_data": "abc"}""")
+            assertFailsWith<IllegalArgumentException> { runner.inputOf(example) }
         } finally {
-            withAccounts.deleteExisting()
+            example.deleteExisting()
         }
     }
 }

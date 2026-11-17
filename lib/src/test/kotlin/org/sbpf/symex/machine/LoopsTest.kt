@@ -5,6 +5,7 @@ import org.sbpf.symex.ir.Exit
 import org.sbpf.symex.ir.Expr
 import org.sbpf.symex.ir.IrBlock
 import org.sbpf.symex.ir.IrFunction
+import org.sbpf.symex.ir.IrModule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,11 +18,16 @@ class LoopsTest {
 
     private fun ja(pc: Int, target: Int) = Exit.Next(target, pc)
 
+    // One function; the module graph is the function's own graph then.
     private fun fn(vararg blocks: IrBlock) = IrFunction(blocks.first().start, "f", blocks.toList())
 
     private fun IrFunction.exitOf(start: Int) = blocks.single { it.start == start }.exit
 
-    private fun loopsOf(function: IrFunction) = findLoops(function).associateBy { it.header }
+    private fun loopsOf(function: IrFunction) = loopsOf(module(function))
+
+    private fun loopsOf(module: IrModule) = findLoops(module).associateBy { it.header }
+
+    private fun findLoops(function: IrFunction) = findLoops(module(function))
 
     // do { … } while (c): the body is one block, its branch decides the iteration.
     @Test
@@ -130,7 +136,7 @@ class LoopsTest {
         assertEquals(emptyList(), findLoops(f))
     }
 
-    // A jump to a block of another function leaves the loop.
+    // A jump to a block of another function leaves the loop when that block does not come back.
     @Test
     fun jumpIntoAnotherFunctionLeavesTheLoop() {
         val f = fn(
@@ -138,8 +144,29 @@ class LoopsTest {
             block(1, exit = branch(1, 100, 2)),
             block(2, exit = ja(2, 1)),
         )
-        val loop = loopsOf(f).values.single()
+        val g = IrFunction(100, "g", listOf(block(100, exit = Exit.Return(100))))
+        val loop = loopsOf(module(f, g)).values.single()
         assertEquals(setOf(1, 2), loop.body)
         assertEquals(setOf(f.exitOf(1)), loop.forkPoints)
+    }
+
+    // A loop through two functions (f jumps into a block of g that jumps back; the lifter's function boundaries are
+    // approximate): found on the module graph, with the body in both functions. The block of g must not be reachable
+    // from g's own entry, otherwise the header would not dominate it (an irreducible loop).
+    @Test
+    fun loopThroughTwoFunctions() {
+        val f = fn(
+            block(0, exit = Exit.Next(1)),
+            block(1, exit = branch(1, 100, 2)),
+            block(2, exit = Exit.Return(2)),
+        )
+        val g = IrFunction(50, "g", listOf(block(50, exit = Exit.Return(50)), block(100, exit = ja(100, 1))))
+        val loop = loopsOf(module(f, g)).values.single()
+        assertEquals(1, loop.header)
+        assertEquals(setOf(1, 100), loop.body)
+        assertEquals(setOf(f.exitOf(1)), loop.forkPoints)
+        // Reachable from g's entry as well: entered from two sides, not a natural loop.
+        val g2 = IrFunction(50, "g", listOf(block(50, exit = Exit.Next(100)), block(100, exit = ja(100, 1))))
+        assertEquals(emptyList(), findLoops(module(f, g2)))
     }
 }

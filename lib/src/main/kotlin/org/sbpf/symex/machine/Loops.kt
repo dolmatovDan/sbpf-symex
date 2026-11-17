@@ -1,30 +1,37 @@
 package org.sbpf.symex.machine
 
 import org.sbpf.symex.ir.Exit
-import org.sbpf.symex.ir.IrFunction
+import org.sbpf.symex.ir.IrModule
 import org.sbpf.symex.ir.Step
 
-// A natural loop of a function, on the graph of its blocks (identified by start pc). The body includes the header.
+// A natural loop on the graph of the module's blocks (identified by start pc). The body includes the header.
 // forkPoints are the branch exits inside the body whose outcome decides whether the iteration ends: the limiter
 // (SbpfLoopTracker) counts an iteration as symbolic only if the path forked at one of them.
 class Loop(val header: Int, val body: Set<Int>, val forkPoints: Set<Step>) {
     override fun toString() = "loop at $header, body $body"
 }
 
+// A virtual root with an edge to every function entry: functions are reached by calls, which the block graph does
+// not contain (a call continues at its return site). Not a block start (those are pcs, non-negative).
+private const val ROOT = -2
+
 // Natural loops: a back edge u -> h with h dominating u; the body is h plus everything that reaches u without
-// passing through h; loops with the same header are merged. Edges are the exits' targets (Exit.targets); a target
-// outside the function (ir.md allows a jump into another function) is an exit from the loop. Irreducible loops
-// (entered in the middle) have no back edge in this sense and are not found: there only the step limit holds.
-fun findLoops(function: IrFunction): List<Loop> {
-    val blocks = function.blocks.associateBy { it.start }
-    val successors = blocks.mapValues { (_, block) -> block.exit.targets().filter { it in blocks } }
-    val reachable = reachableFrom(function.entry, successors)
+// passing through h; loops with the same header are merged. The graph is the whole module's: blocks are unique
+// across functions, and a jump into another function (ir.md allows it) is an ordinary edge, so a loop through two
+// functions is found too. Edges are the exits' targets (Exit.targets). Irreducible loops (entered in the middle,
+// also from another function's entry) have no back edge in this sense and are not found: there only the step
+// limit holds.
+fun findLoops(module: IrModule): List<Loop> {
+    val blocks = module.functions.flatMap { it.blocks }.associateBy { it.start }
+    val successors = blocks.mapValues { (_, block) -> block.exit.targets().filter { it in blocks } } +
+        (ROOT to module.functions.map { it.entry })
+    val reachable = reachableFrom(ROOT, successors)
     val predecessors = reachable.associateWith { mutableListOf<Int>() }
     for (node in reachable) for (next in successors.getValue(node)) predecessors.getValue(next) += node
-    val dominators = dominators(reachable, function.entry, predecessors)
+    val dominators = dominators(reachable, ROOT, predecessors)
 
     val bodies = linkedMapOf<Int, MutableSet<Int>>()
-    for (tail in reachable) {
+    for (tail in reachable - ROOT) {
         for (header in successors.getValue(tail)) {
             if (header !in dominators.getValue(tail)) continue
             val body = bodies.getOrPut(header) { mutableSetOf(header) }

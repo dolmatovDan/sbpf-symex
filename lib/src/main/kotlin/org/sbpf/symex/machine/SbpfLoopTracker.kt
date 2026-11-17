@@ -6,10 +6,9 @@ import org.usvm.ps.StateLoopTracker
 
 // Feeds usvm's loop limiter (LoopLimiterPs) with the loops of the program: a state enters a loop when its step is the
 // first step of the header block, and an iteration counts as symbolic when the path forked at one of the loop's
-// fork points during it. Blocks are unique across the module, so one map serves all functions.
+// fork points during it.
 class SbpfLoopTracker(module: IrModule, graph: SbpfApplicationGraph) : StateLoopTracker<Loop, Step, SbpfState> {
-    private val loopsByEntry: Map<Step, Loop> =
-        module.functions.flatMap { findLoops(it) }.associateBy { graph.blockEntry(it.header) }
+    private val loopsByEntry: Map<Step, Loop> = findLoops(module).associateBy { graph.blockEntry(it.header) }
 
     override fun findLoopEntrance(statement: Step): Loop? = loopsByEntry[statement]
 
