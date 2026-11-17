@@ -29,6 +29,8 @@ private const val MAX_OFFSET = 0xFFFFFFFuL
 class MemoryRegion(val name: String, val start: ULong, val size: ULong, val writable: Boolean) {
     init {
         require(start shr 32 <= MAX_SLOT) { "$name: start 0x${start.toString(16)} is outside the VM slots" }
+        // Both checks are needed: with the start offset past MAX_OFFSET the subtraction below would wrap around.
+        require((start and 0xFFFFFFFFuL) <= MAX_OFFSET) { "$name: start 0x${start.toString(16)} has no key" }
         // A region never crosses a slot: start and the last byte share the slot.
         require(size <= MAX_OFFSET + 1uL - (start and 0xFFFFFFFFuL)) {
             "$name: size 0x${size.toString(16)} does not fit into the slot at 0x${start.toString(16)}"

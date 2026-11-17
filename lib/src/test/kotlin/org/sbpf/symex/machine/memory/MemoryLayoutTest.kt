@@ -96,6 +96,10 @@ class MemoryLayoutTest {
     fun regionMustFitTheSlot() {
         assertFailsWith<IllegalArgumentException> { MemoryRegion("big", MM_HEAP_START, 0x10000001uL, writable = true) }
         MemoryRegion("max", MM_HEAP_START, 0x10000000uL, writable = true)
+        // A start past the keyed part of the slot: the size bound would wrap around without the start check.
+        assertFailsWith<IllegalArgumentException> {
+            MemoryRegion("far", MM_HEAP_START + 0x10000001uL, 16uL, writable = true)
+        }
     }
 }
 

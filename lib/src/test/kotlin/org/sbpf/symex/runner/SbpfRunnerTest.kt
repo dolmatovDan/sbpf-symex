@@ -42,7 +42,7 @@ class SbpfRunnerTest {
     }
 
     // The input the machine gets is the example's: instruction data from hex, the program id from base58;
-    // an example with accounts is rejected until accounts are modeled.
+    // an example with accounts is rejected until accounts are modeled (an empty list is the layout we model).
     @Test
     fun inputOfExample() {
         val memory = runner.inputOf(runner.examples.resolve("asm/memory.json"))
@@ -54,10 +54,12 @@ class SbpfRunnerTest {
         assertEquals(0, runner.inputOf(alu64).ix.length)
         val withAccounts = createTempFile(suffix = ".json")
         try {
-            withAccounts.writeText(
-                """{"program": "x.v0.so", "program_id": "Asm1111111111111111111111111111111111111111",
-                   "instruction_data": "", "accounts": []}""",
-            )
+            val header = """{"program": "x.v0.so", "program_id": "Asm1111111111111111111111111111111111111111","""
+            withAccounts.writeText("""$header "instruction_data": "", "accounts": []}""")
+            assertEquals(0, runner.inputOf(withAccounts).ix.length)
+            val account =
+                """{"key": "Asm1111111111111111111111111111111111111111", "owner": "11111111111111111111111111111111", "lamports": 1}"""
+            withAccounts.writeText("""$header "instruction_data": "", "accounts": [$account]}""")
             assertFailsWith<IllegalArgumentException> { runner.inputOf(withAccounts) }
         } finally {
             withAccounts.deleteExisting()

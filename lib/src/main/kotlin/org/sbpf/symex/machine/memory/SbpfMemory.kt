@@ -23,13 +23,12 @@ import org.usvm.collection.array.UArrayRegionId
 // 32-bit key of MemoryLayout, so a constant address resolves through the update log without the solver.
 class SbpfMemoryModel(
     val layout: MemoryLayout,
-    val input: InputSpec,
     // rodata is immutable: a load from a constant address takes the byte from here, not from mem.
     val rodata: ByteArray,
     val mem: UConcreteHeapRef,
     // The initial bytes of the input region, indexed by the offset inside the region.
     val input0: UConcreteHeapRef,
-    // rodata as an array, for loads by a symbolic address; filled on demand (ensureRodataInMemory).
+    // rodata as an array (filled once, in initializeMemory), copied into mem on demand (ensureRodataInMemory).
     val ro: UConcreteHeapRef,
 )
 
@@ -48,10 +47,25 @@ fun SbpfState.initializeMemory(module: IrModule, input: InputSpec, heapSize: ULo
     val mem = memory.allocConcrete(SbpfType)
     val input0 = memory.allocStatic(SbpfType)
     val ro = memory.allocConcrete(SbpfType)
-    memoryModelOrNull = SbpfMemoryModel(layout, input, module.roRegion.data, mem, input0, ro)
+    memoryModelOrNull = SbpfMemoryModel(layout, module.roRegion.data, mem, input0, ro)
 
     val inputKey = key(layout.input.start)
     updateByteRegion { region -> copyInto(region, input0, inputKey, input.size) }
+    // The ro array is built once: its update nodes (one per byte) are then shared by every path through the
+    // persistent region, and only the one-node copy into mem is made on demand.
+    if (module.roRegion.data.isNotEmpty()) {
+        val content = module.roRegion.data.map { mkBv(it) as ByteExpr }
+        updateByteRegion { region ->
+            region.initializeAllocatedArray(
+                address = ro.address,
+                arrayType = SbpfType,
+                sort = bv8Sort,
+                content = content,
+                operationGuard = trueExpr,
+                ownership = memory.ownership,
+            )
+        }
+    }
     val layoutBytes = input.layoutBytes()
     for (offset in layoutBytes.indices) {
         if (input.isIx(offset)) continue
@@ -107,26 +121,15 @@ fun SbpfState.storeSymbolic(addr: UExpr<UBvSort>, value: UExpr<UBvSort>) {
     }
 }
 
-// A symbolic load may hit rodata, so rodata has to be in mem. The copy costs one update node per byte (usvm's
-// initializedArray) and in v0 the region is the whole image including the code, hence it is made once per path and
-// only when a symbolic load happens. Stores never need it: rodata is read-only, accessCondition excludes it.
+// A symbolic load may hit rodata, so rodata has to be in mem. The ranged copy puts the whole rodata (in v0 the whole
+// image including the code) in front of every later symbolic read of mem, hence it is made only on a path that
+// performs a symbolic load, once. Stores never need it: rodata is read-only, accessCondition excludes it.
 private fun SbpfState.ensureRodataInMemory() {
     if (rodataInMemory) return
     rodataInMemory = true
     val model = memoryModel
     if (model.rodata.isEmpty()) return
-    val content = model.rodata.map { ctx.mkBv(it) as ByteExpr }
-    updateByteRegion { region ->
-        val withRo = region.initializeAllocatedArray(
-            address = model.ro.address,
-            arrayType = SbpfType,
-            sort = ctx.bv8Sort,
-            content = content,
-            operationGuard = ctx.trueExpr,
-            ownership = memory.ownership,
-        )
-        copyInto(withRo, model.ro, key(model.layout.rodata.start), model.rodata.size)
-    }
+    updateByteRegion { region -> copyInto(region, model.ro, key(model.layout.rodata.start), model.rodata.size) }
 }
 
 // mem[dstKey, dstKey + size) := source[0, size), one ranged update. The last destination index is inclusive

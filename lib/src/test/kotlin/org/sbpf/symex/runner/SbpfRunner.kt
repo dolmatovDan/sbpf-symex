@@ -3,6 +3,7 @@ package org.sbpf.symex.runner
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.sbpf.symex.ir.IrJson
@@ -49,7 +50,9 @@ class SbpfRunner(sbpfIr: Path) {
     // same input region as the runner. Accounts are not modeled yet.
     fun inputOf(example: Path): InputSpec {
         val json = readExample(example)
-        require("accounts" !in json) { "$example: accounts are not supported by the machine yet" }
+        require(json["accounts"]?.jsonArray.isNullOrEmpty()) {
+            "$example: accounts are not supported by the machine yet"
+        }
         val programId = decodeBase58(json.getValue("program_id").jsonPrimitive.content)
         val ix = json.getValue("instruction_data").jsonPrimitive.content
             .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
