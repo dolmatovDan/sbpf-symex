@@ -1,8 +1,7 @@
 package org.sbpf.symex.machine
 
-// VM memory region addresses (solana-sbpf, ebpf.rs).
-const val MM_STACK_START = 0x200000000uL
-const val MM_INPUT_START = 0x400000000uL
+import org.sbpf.symex.machine.memory.MM_INPUT_START
+import org.sbpf.symex.machine.memory.MM_STACK_START
 
 // Stack frame for v0 and v3: they have no manual frame bump (manual_stack_frame_bump); only v1/v2 do.
 const val STACK_FRAME_SIZE = 0x1000uL
